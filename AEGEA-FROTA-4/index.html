@@ -341,15 +341,62 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script>
-    let currentUserRole = null;
-    const initialBaseFrota = [{ placa: "TDS7I49", modelo: "FIORINO", condutor: "Gabriel", kmAtual: 45000, kmRevisao: 50000 }];
-    let baseFrota = JSON.parse(localStorage.getItem('frota_base_v3')) || initialBaseFrota;
-    let emTransito = JSON.parse(localStorage.getItem('frota_em_transito_v3')) || [];
-    let emManutencao = JSON.parse(localStorage.getItem('frota_manutencao_v3')) || [];
-    let historico = JSON.parse(localStorage.getItem('frota_historico_v3')) || [];
-    let historicoManutencao = JSON.parse(localStorage.getItem('frota_historico_manutencao_v3')) || [];
+<script type="module">
+    // --- CONFIGURAÇÃO FIREBASE ---
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getDatabase, ref, push, onValue, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyAR87299J4SWl8qz9zX9_cNjJMoiXfRdDc",
+        authDomain: "aegea-21b34.firebaseapp.com",
+        databaseURL: "https://aegea-21b34-default-rtdb.firebaseio.com",
+        projectId: "aegea-21b34",
+        storageBucket: "aegea-21b34.firebasestorage.app",
+        messagingSenderId: "205645361536",
+        appId: "1:205645361536:web:5223c969f8441b213c1165"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
     
+    // Referências das "pastas" no seu banco de dados
+    const historicoRef = ref(db, 'historico');
+    const baseFrotaRef = ref(db, 'baseFrota');
+    const emTransitoRef = ref(db, 'emTransito');
+
+    // --- VARIÁVEIS DO SISTEMA ---
+    let currentUserRole = null;
+    let baseFrota = [];
+    let emTransito = [];
+    let emManutencao = [];
+    let historico = [];
+    let historicoManutencao = [];
+    // Escutando a Base da Frota
+    onValue(baseFrotaRef, (snapshot) => {
+        const data = snapshot.val();
+        baseFrota = data ? Object.values(data) : [{ placa: "TDS7I49", modelo: "FIORINO", condutor: "Gabriel", kmAtual: 45000, kmRevisao: 50000 }];
+        carregarSelect(); 
+        atualizarTabelas();
+    });
+
+    // Escutando o Histórico de Viagens
+    onValue(historicoRef, (snapshot) => {
+        const data = snapshot.val();
+        historico = data ? Object.values(data) : [];
+        atualizarTabelas();
+        atualizarDashboard();
+    });
+
+    // Escutando Veículos em Trânsito
+    onValue(emTransitoRef, (snapshot) => {
+        const data = snapshot.val();
+        emTransito = data ? Object.values(data) : [];
+        atualizarTabelas();
+    });
+    window.login = function(role) { // Adicione o window. na frente
+    if(role === 'motorista') { ... }
+    // ... restante do código
+}
     // NOVO: Categorias de Manutenção (Melhoria 3)
     let categoriasManutencao = JSON.parse(localStorage.getItem('sgf_categorias_manutencao')) || ['Mecânica', 'Elétrica', 'Pneus', 'Funilaria', 'Revisão', 'Outros'];
 
@@ -423,26 +470,50 @@
         document.getElementById('status-box').style.backgroundColor = boxColor;
     }
 
-    window.registrarSaida = function(tipo) {
-        if(!selectPlaca.value) return Swal.fire('Ops', 'Selecione um veículo', 'warning');
-        if(!inputKmSaida.value) return Swal.fire('Ops', 'Informe a KM', 'warning');
-        if(!inputCondutor.value) return Swal.fire('Ops', 'Informe o condutor', 'warning');
-        if(emTransito.find(x=>x.placa === selectPlaca.value)) return Swal.fire('Erro', 'Veículo já saiu!', 'error');
-        if(emManutencao.find(x=>x.placa === selectPlaca.value)) return Swal.fire('Erro', 'Veículo em manutenção!', 'error');
-        
-        // Atualiza o KM atual na base antes de sair
-        const v = baseFrota.find(x => x.placa === selectPlaca.value);
-        if(v) v.kmAtual = parseInt(inputKmSaida.value);
-
-        emTransito.push({
-            placa: selectPlaca.value, modelo: inputModelo.value, condutor: inputCondutor.value,
-            kmSaida: parseInt(inputKmSaida.value), status: tipo, justificativa: inputJustificativa.value,
-            saida: new Date().getTime()
-        });
-        salvarTudo();
-        Swal.fire({icon: 'success', title: 'Saída Registrada', timer: 1500, showConfirmButton: false});
-        limparForm();
+   window.registrarSaida = function(tipo) {
+    if(!selectPlaca.value) return Swal.fire('Ops', 'Selecione um veículo', 'warning');
+    if(!inputKmSaida.value) return Swal.fire('Ops', 'Informe a KM', 'warning');
+    if(!inputCondutor.value) return Swal.fire('Ops', 'Informe o condutor', 'warning');
+    
+    // Verifica se já está na rua
+    if(emTransito.find(x => x.placa === selectPlaca.value)) {
+        return Swal.fire('Erro', 'Veículo já saiu!', 'error');
     }
+
+    const novaSaida = {
+        placa: selectPlaca.value,
+        modelo: inputModelo.value,
+        condutor: inputCondutor.value,
+        kmSaida: parseInt(inputKmSaida.value),
+        saida: new Date().toISOString(),
+        justificativa: inputJustificativa.value || '',
+        status: 'em_trânsito'
+    };
+
+    // 1. Envia para a nuvem (Firebase)
+    // O 'push' gera um ID único para cada saída na pasta 'emTransito'
+    push(emTransitoRef, novaSaida).then(() => {
+        // 2. Atualiza a KM na base geral também na nuvem
+        const index = baseFrota.findIndex(v => v.placa === selectPlaca.value);
+        if(index !== -1) {
+            // Atualizamos o registro específico na nuvem
+            const veiculoRef = ref(db, `baseFrota/${index}`);
+            set(veiculoRef, { ...baseFrota[index], kmAtual: parseInt(inputKmSaida.value) });
+        }
+
+        Swal.fire({
+            icon: 'success',
+            title: 'Saída Registrada!',
+            text: 'Dados sincronizados em tempo real.',
+            timer: 2000,
+            showConfirmButton: false
+        });
+        
+        limparForm();
+    }).catch((error) => {
+        Swal.fire('Erro ao sincronizar', error.message, 'error');
+    });
+};
 
     window.registrarEntrada = function() {
         if(!selectPlaca.value) return Swal.fire('Ops', 'Selecione um veículo', 'warning');
