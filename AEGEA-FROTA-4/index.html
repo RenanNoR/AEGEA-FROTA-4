@@ -1028,7 +1028,8 @@
     // 2. Exemplo de como percorrer seus dados (ajuste conforme seu array de dados)
     // Supondo que você tenha um array chamado 'historico'
     historico.forEach(item => {
-        let linha = `${item.data};${item.placa};${item.condutor};${item.km};${item.tempo};${item.obs}\n`;
+        // O segredo é garantir que CADA item seja separado por ";"
+const linha = item.data + ";" + item.placa + ";" + item.condutor + ";" + item.km + ";" + item.tempo + ";" + item.obs + "\n";
         csvContent += linha;
     });
 
