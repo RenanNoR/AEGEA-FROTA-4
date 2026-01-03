@@ -1020,18 +1020,28 @@
         }; 
         r.readAsText(i.files[0]); 
     }
-    window.exportarExcel = function() { 
-        let c="Data,Placa,Condutor,KM Rodados,Tempo Viagem,Obs\n"; 
-        historico.forEach(i => {
-            const data = new Date(i.saida).toLocaleDateString();
-            const tempo = calcularTempo(i.duracaoMs);
-            c += `${data},${i.placa},${i.condutor},${i.kmRodados},${tempo},${i.justificativa}\n`
-        }); 
-        const a=document.createElement("a"); 
-        a.href="data:text/csv;charset=utf-8,"+encodeURI(c); 
-        a.download="Historico.csv"; 
-        a.click(); 
-    }
+    window.exportarExcel = function() {
+    // 1. Cabeçalho com ponto e vírgula
+    let csvContent = "sep=;\n"; // Instrução para o Excel
+    csvContent += "Data;Placa;Condutor;KM Rodados;Tempo Viagem;Obs\n";
+
+    // 2. Exemplo de como percorrer seus dados (ajuste conforme seu array de dados)
+    // Supondo que você tenha um array chamado 'historico'
+    historico.forEach(item => {
+        let linha = `${item.data};${item.placa};${item.condutor};${item.km};${item.tempo};${item.obs}\n`;
+        csvContent += linha;
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "Historico_Frota.csv";
+    a.click();
+    
+    URL.revokeObjectURL(url);
+};
 </script>
 </body>
 </html>
