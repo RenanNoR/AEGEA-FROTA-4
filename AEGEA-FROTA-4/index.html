@@ -341,10 +341,11 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script type="module">
-    // --- CONFIGURAÇÃO FIREBASE ---
+    // --- 1. CONFIGURAÇÃO E IMPORTAÇÃO FIREBASE ---
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getDatabase, ref, push, onValue, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+    import { getDatabase, ref, push, onValue, set, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyAR87299J4SWl8qz9zX9_cNjJMoiXfRdDc",
@@ -359,50 +360,18 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     
-    // Referências das "pastas" no seu banco de dados
-    const historicoRef = ref(db, 'historico');
+    // Referências das "Pastas" na Nuvem
     const baseFrotaRef = ref(db, 'baseFrota');
     const emTransitoRef = ref(db, 'emTransito');
+    const historicoRef = ref(db, 'historico');
 
-    // --- VARIÁVEIS DO SISTEMA ---
-    let currentUserRole = null;
-    let baseFrota = [];
-    let emTransito = [];
-    let emManutencao = [];
-    let historico = [];
-    let historicoManutencao = [];
-    // Escutando a Base da Frota
-    onValue(baseFrotaRef, (snapshot) => {
-        const data = snapshot.val();
-        baseFrota = data ? Object.values(data) : [{ placa: "TDS7I49", modelo: "FIORINO", condutor: "Gabriel", kmAtual: 45000, kmRevisao: 50000 }];
-        carregarSelect(); 
-        atualizarTabelas();
-    });
-
-    // Escutando o Histórico de Viagens
-    onValue(historicoRef, (snapshot) => {
-        const data = snapshot.val();
-        historico = data ? Object.values(data) : [];
-        atualizarTabelas();
-        atualizarDashboard();
-    });
-
-    // Escutando Veículos em Trânsito
-    onValue(emTransitoRef, (snapshot) => {
-        const data = snapshot.val();
-        emTransito = data ? Object.values(data) : [];
-        atualizarTabelas();
-    });
-    window.login = function(role) { // Adicione o window. na frente
-    if(role === 'motorista') { ... }
-    // ... restante do código
-}
-    // NOVO: Categorias de Manutenção (Melhoria 3)
-    let categoriasManutencao = JSON.parse(localStorage.getItem('sgf_categorias_manutencao')) || ['Mecânica', 'Elétrica', 'Pneus', 'Funilaria', 'Revisão', 'Outros'];
-
-    let paginaAtual = 1; 
-    const itensPorPagina = 10; 
-    let historicoFiltradoCache = [];
+    // --- 2. VARIÁVEIS GLOBAIS ---
+    window.currentUserRole = null;
+    window.baseFrota = [];
+    window.emTransito = [];
+    window.historico = [];
+    window.emManutencao = []; 
+    window.categoriasManutencao = ['Mecânica', 'Elétrica', 'Pneus', 'Funilaria', 'Revisão', 'Outros'];
 
     const selectPlaca = document.getElementById('select-placa');
     const inputModelo = document.getElementById('input-modelo');
@@ -410,711 +379,160 @@
     const inputKmSaida = document.getElementById('input-km-saida');
     const inputJustificativa = document.getElementById('input-justificativa');
 
-    function login(role) {
-        if(role === 'motorista') { currentUserRole = 'motorista'; iniciarSistema(); }
-        else { 
+    // --- 3. SINCRONIZAÇÃO EM TEMPO REAL (Ouvintes) ---
+    onValue(baseFrotaRef, (snapshot) => {
+        const data = snapshot.val();
+        // Se o banco estiver vazio, inicia com o Fiorino padrão
+        window.baseFrota = data ? Object.values(data) : [{ placa: "TDS7I49", modelo: "FIORINO", condutor: "Gabriel", kmAtual: 45000, kmRevisao: 50000 }];
+        window.carregarSelect(); 
+        window.atualizarTabelas();
+    });
+
+    onValue(emTransitoRef, (snapshot) => {
+        const data = snapshot.val();
+        // Mapeamos os dados com a chave do Firebase para facilitar a exclusão na volta
+        window.emTransito = data ? Object.keys(data).map(key => ({...data[key], firebaseKey: key})) : [];
+        window.atualizarTabelas();
+    });
+
+    onValue(historicoRef, (snapshot) => {
+        const data = snapshot.val();
+        window.historico = data ? Object.values(data) : [];
+        window.atualizarTabelas();
+        window.atualizarDashboard();
+    });
+
+    // --- 4. FUNÇÕES DO SISTEMA (Com vínculo window para botões HTML) ---
+
+    window.login = function(role) {
+        if(role === 'motorista') { 
+            window.currentUserRole = 'motorista'; 
+            window.iniciarSistema(); 
+        } else { 
             const p = document.getElementById('admin-pass').value; 
-            if(p === 'admin123') { currentUserRole = 'admin'; iniciarSistema(); } 
-            else Swal.fire({icon:'error', title:'Senha Incorreta', confirmButtonColor: 'var(--primary)'});
+            if(p === 'admin123') { 
+                window.currentUserRole = 'admin'; 
+                window.iniciarSistema(); 
+            } else {
+                Swal.fire({icon:'error', title:'Senha Incorreta'});
+            }
         }
-    }
-    function mostrarInputAdmin() { document.getElementById('admin-pass').style.display = 'block'; document.getElementById('admin-pass').focus(); }
-    function checkAdminPass(e) { if(e.key==='Enter') login('admin'); }
-    function iniciarSistema() {
+    };
+
+    window.iniciarSistema = function() {
         document.getElementById('login-screen').style.display = 'none';
         document.querySelector('.container').style.display = 'block';
-        if(currentUserRole === 'admin') {
-            document.body.classList.add('admin-mode');
-        }
-        document.getElementById('user-badge').innerText = currentUserRole === 'admin' ? 'ADMIN' : 'OPERADOR';
-        mudarAba('monitoramento'); carregarSelect(); atualizarTabelas(); atualizarDashboard();
-    }
-    function logout() { location.reload(); }
-    window.onload = function() { if(!localStorage.getItem('frota_base_v3')) salvarBaseFrota(); setInterval(atualizarRelogio, 1000); }
+        if(window.currentUserRole === 'admin') document.body.classList.add('admin-mode');
+        document.getElementById('user-badge').innerText = window.currentUserRole === 'admin' ? 'ADMIN' : 'OPERADOR';
+        window.mudarAba('monitoramento');
+    };
 
-    function carregarSelect() {
+    window.carregarSelect = function() {
+        if(!selectPlaca) return;
         selectPlaca.innerHTML = '<option value="">-- Toque para selecionar --</option>';
-        baseFrota.sort((a,b)=>a.placa.localeCompare(b.placa)).forEach(v => {
+        window.baseFrota.sort((a,b)=>a.placa.localeCompare(b.placa)).forEach(v => {
             const opt = document.createElement('option');
             opt.value = v.placa; opt.text = `${v.placa} - ${v.modelo}`;
             selectPlaca.appendChild(opt);
         });
-    }
+    };
 
     window.preencherDados = function() {
         const placa = selectPlaca.value;
-        if(!placa) return limparForm();
-        const v = baseFrota.find(x => x.placa === placa);
+        if(!placa) return window.limparForm();
+        const v = window.baseFrota.find(x => x.placa === placa);
         if(!v) return;
         inputModelo.value = v.modelo;
-        const t = emTransito.find(x => x.placa === placa);
-        const m = emManutencao.find(x => x.placa === placa);
+        const t = window.emTransito.find(x => x.placa === placa);
         inputCondutor.value = t ? t.condutor : v.condutor;
-        inputJustificativa.value = t ? t.justificativa : '';
         inputKmSaida.value = t ? t.kmSaida : (v.kmAtual || '');
-        inputKmSaida.readOnly = !!t; 
-        let statusHTML = '<span class="badge status-disp" style="background:#dcfce7; color:#15803d"><i class="fa-solid fa-check"></i> DISPONÍVEL</span>';
-        let boxColor = '#f0fdf4';
+        inputKmSaida.readOnly = !!t;
         
-        // Alerta de Revisão no Status Box
-        if(v.kmRevisao && v.kmAtual) {
-            const kmRestante = v.kmRevisao - v.kmAtual;
-            if(kmRestante <= 1000 && kmRestante > 0) statusHTML += '<br><span style="color:var(--warning); font-weight:bold; font-size:0.8rem;">⚠️ REVISÃO PRÓXIMA</span>';
-            else if(kmRestante <= 0) statusHTML += '<br><span style="color:var(--danger); font-weight:bold; font-size:0.8rem;">☠️ REVISÃO VENCIDA</span>';
-        }
-
-        if(t) { statusHTML = `<span class="badge status-rua" style="background:#fef3c7; color:#b45309"><i class="fa-solid fa-road"></i> EM TRÂNSITO</span><br><small>Desde: ${formatarHora(t.saida)}</small>`; boxColor = '#fffbeb'; } 
-        else if (m) { statusHTML = `<span class="badge status-manut" style="background:#f1f5f9; color:#475569"><i class="fa-solid fa-wrench"></i> ${m.categoria || 'MANUTENÇÃO'}</span>`; boxColor = '#f1f5f9'; }
-        
+        let statusHTML = t ? '<span class="badge" style="background:#fef3c7; color:#b45309">EM TRÂNSITO</span>' : '<span class="badge" style="background:#dcfce7; color:#15803d">DISPONÍVEL</span>';
         document.getElementById('status-texto').innerHTML = statusHTML;
-        document.getElementById('status-box').style.backgroundColor = boxColor;
-    }
-
-   window.registrarSaida = function(tipo) {
-    if(!selectPlaca.value) return Swal.fire('Ops', 'Selecione um veículo', 'warning');
-    if(!inputKmSaida.value) return Swal.fire('Ops', 'Informe a KM', 'warning');
-    if(!inputCondutor.value) return Swal.fire('Ops', 'Informe o condutor', 'warning');
-    
-    // Verifica se já está na rua
-    if(emTransito.find(x => x.placa === selectPlaca.value)) {
-        return Swal.fire('Erro', 'Veículo já saiu!', 'error');
-    }
-
-    const novaSaida = {
-        placa: selectPlaca.value,
-        modelo: inputModelo.value,
-        condutor: inputCondutor.value,
-        kmSaida: parseInt(inputKmSaida.value),
-        saida: new Date().toISOString(),
-        justificativa: inputJustificativa.value || '',
-        status: 'em_trânsito'
     };
 
-    // 1. Envia para a nuvem (Firebase)
-    // O 'push' gera um ID único para cada saída na pasta 'emTransito'
-    push(emTransitoRef, novaSaida).then(() => {
-        // 2. Atualiza a KM na base geral também na nuvem
-        const index = baseFrota.findIndex(v => v.placa === selectPlaca.value);
-        if(index !== -1) {
-            // Atualizamos o registro específico na nuvem
-            const veiculoRef = ref(db, `baseFrota/${index}`);
-            set(veiculoRef, { ...baseFrota[index], kmAtual: parseInt(inputKmSaida.value) });
-        }
-
-        Swal.fire({
-            icon: 'success',
-            title: 'Saída Registrada!',
-            text: 'Dados sincronizados em tempo real.',
-            timer: 2000,
-            showConfirmButton: false
-        });
+    window.registrarSaida = function() {
+        if(!selectPlaca.value || !inputKmSaida.value) return Swal.fire('Erro', 'Preencha os campos!', 'error');
         
-        limparForm();
-    }).catch((error) => {
-        Swal.fire('Erro ao sincronizar', error.message, 'error');
-    });
-};
+        const novaSaida = {
+            placa: selectPlaca.value,
+            modelo: inputModelo.value,
+            condutor: inputCondutor.value,
+            kmSaida: parseInt(inputKmSaida.value),
+            saida: new Date().toISOString(),
+            status: 'em_trânsito'
+        };
+
+        push(emTransitoRef, novaSaida).then(() => {
+            Swal.fire('Sucesso', 'Veículo em trânsito (Nuvem)', 'success');
+            window.limparForm();
+        });
+    };
 
     window.registrarEntrada = function() {
-        if(!selectPlaca.value) return Swal.fire('Ops', 'Selecione um veículo', 'warning');
-        const item = emTransito.find(x=>x.placa === selectPlaca.value);
-        if(!item) return Swal.fire('Erro', 'Veículo não consta como SAÍDA.', 'error');
+        const item = window.emTransito.find(x => x.placa === selectPlaca.value);
+        if(!item) return Swal.fire('Erro', 'Veículo não está em trânsito', 'error');
+
         Swal.fire({
-            title: 'Baixa de Veículo',
-            html: `KM Saída: <b>${item.kmSaida}</b><br>Informe a KM de Chegada:`,
+            title: 'KM de Chegada',
             input: 'number',
-            showCancelButton: true,
-            confirmButtonColor: 'var(--success)',
-            confirmButtonText: 'Confirmar Baixa'
+            showCancelButton: true
         }).then((res) => {
             if(res.isConfirmed) {
                 const kmChegada = parseInt(res.value);
-                if (!kmChegada || kmChegada < item.kmSaida) return Swal.fire('Erro', 'KM Inválida!', 'error');
-                const kmRodados = kmChegada - item.kmSaida;
-                const idx = baseFrota.findIndex(v => v.placa === item.placa);
-                if(idx !== -1) baseFrota[idx].kmAtual = kmChegada;
-                historico.unshift({...item, chegada: new Date().getTime(), kmChegada, kmRodados, duracaoMs: new Date().getTime() - item.saida});
-                emTransito = emTransito.filter(x => x.placa !== item.placa);
-                salvarTudo();
-                Swal.fire('Sucesso!', `Veículo baixado. Rodou ${kmRodados} Km.`, 'success');
-                limparForm();
+                const viagemFinalizada = {
+                    ...item,
+                    kmChegada: kmChegada,
+                    chegada: new Date().toISOString(),
+                    kmRodados: kmChegada - item.kmSaida
+                };
+                delete viagemFinalizada.firebaseKey; // Limpa a chave temporária
+
+                // 1. Salva no histórico
+                push(historicoRef, viagemFinalizada).then(() => {
+                    // 2. Remove da lista de trânsito usando a chave salva
+                    remove(ref(db, `emTransito/${item.firebaseKey}`));
+                    Swal.fire('Finalizado', 'Viagem salva no histórico!', 'success');
+                });
             }
         });
-    }
+    };
 
-    function limparForm() {
-        selectPlaca.value = '';
-        inputModelo.value = '';
-        inputCondutor.value = '';
-        inputKmSaida.value = '';
-        inputJustificativa.value = '';
+    window.mudarAba = function(aba) {
+        document.querySelectorAll('.aba-content').forEach(a => a.style.display = 'none');
+        document.getElementById(`aba-${aba}`).style.display = 'block';
+    };
+
+    window.limparForm = function() {
+        selectPlaca.value = "";
+        inputModelo.value = "";
+        inputCondutor.value = "";
+        inputKmSaida.value = "";
         inputKmSaida.readOnly = false;
-        document.getElementById('status-texto').innerHTML = 'Aguardando...';
-        document.getElementById('status-box').style.backgroundColor = '#f8fafc';
-    }
+        document.getElementById('status-texto').innerText = "Aguardando seleção...";
+    };
 
-    // FUNÇÃO ENVIAR PARA MANUTENÇÃO ATUALIZADA (Melhoria 3 e 4)
-    window.enviarParaManutencao = async function() {
-        const p = selectPlaca.value;
-        const v = baseFrota.find(x => x.placa === p); 
-        if(!p || !v) return Swal.fire('Selecione um veículo');
-        if(emManutencao.find(x=>x.placa===p)) return Swal.fire('Já está em manutenção');
-
-        // 1. Coletar Categoria e Motivo
-        const { value: formValues } = await Swal.fire({
-            title: 'Registro de Manutenção',
-            html: `
-                <div style="text-align:left; margin-bottom: 10px; font-weight:600;">Placa: <b>${p}</b></div>
-                <select id="swal-categoria" class="swal2-input" style="padding:10px 15px;">
-                    <option value="">-- Selecione a Categoria --</option>
-                    ${categoriasManutencao.map(c => `<option value="${c}">${c}</option>`).join('')}
-                </select>
-                <input id="swal-motivo" class="swal2-input" placeholder="Motivo/Descrição (Opcional)" value="${inputJustificativa.value}">
-            `,
-            focusConfirm: false,
-            preConfirm: () => {
-                const categoria = document.getElementById('swal-categoria').value;
-                const motivo = document.getElementById('swal-motivo').value;
-                if (!categoria) { Swal.showValidationMessage('Selecione uma categoria'); return false; }
-                return { categoria, motivo: motivo || categoria };
-            }
+    window.exportarExcel = function() {
+        let csvContent = "\ufeffsep=;\nData;Placa;Condutor;KM Saída;KM Chegada;KM Rodados\n";
+        window.historico.forEach(item => {
+            csvContent += `${new Date(item.saida).toLocaleDateString()};${item.placa};${item.condutor};${item.kmSaida};${item.kmChegada};${item.kmRodados}\n`;
         });
-
-        if (formValues) {
-            const { categoria, motivo } = formValues;
-            
-            // 2. Confirmar/Inserir KM Atual (Melhoria 4)
-            const { value: kmAtualInput } = await Swal.fire({
-                title: 'KM Atual do Veículo',
-                html: `Confirme o KM atual para registro de entrada:<br><b>KM Anterior: ${v.kmAtual}</b>`,
-                input: 'number',
-                inputValue: v.kmAtual,
-                showCancelButton: true,
-                confirmButtonText: 'Confirmar e Enviar',
-                confirmButtonColor: 'var(--manutencao)'
-            });
-
-            if (kmAtualInput !== undefined && kmAtualInput !== null) {
-                const novoKm = parseInt(kmAtualInput);
-                if(novoKm < v.kmAtual) return Swal.fire('Erro', 'KM inserido não pode ser menor que o KM atual registrado.', 'error');
-                
-                // Atualiza KM na baseFrota (Melhoria 4)
-                v.kmAtual = novoKm; 
-
-                // Se o carro estava em trânsito, finaliza a viagem
-                const tIdx = emTransito.findIndex(x=>x.placa===p);
-                if(tIdx !== -1) {
-                    const it = emTransito[tIdx];
-                    historico.unshift({...it, chegada: new Date().getTime(), kmChegada: it.kmSaida, kmRodados: 0, duracaoMs: 0});
-                    emTransito.splice(tIdx, 1);
-                }
-                
-                emManutencao.push({ placa: p, modelo: v.modelo, motivo: motivo, categoria: categoria, dataInicio: new Date().getTime(), kmEntrada: novoKm });
-                
-                salvarTudo();
-                Swal.fire('Enviado!', `Veículo em manutenção. KM atualizado para ${novoKm}.`, 'success');
-                limparForm();
-            }
-        }
-    }
-
-    window.retornarDaManutencao = function(p) {
-        Swal.fire({title:'Finalizar manutenção?', showCancelButton:true, confirmButtonText:'Sim, Baixar', confirmButtonColor: 'var(--success)'}).then(r=>{
-            if(r.isConfirmed){
-                const finishedItem = emManutencao.find(x=>x.placa === p);
-                if (finishedItem) {
-                    historicoManutencao.unshift({...finishedItem, dataFim: new Date().getTime()});
-                }
-                emManutencao = emManutencao.filter(x=>x.placa !== p);
-                salvarTudo();
-                Swal.fire('Veículo Disponível', 'Manutenção registrada no histórico.', 'success');
-            }
-        });
-    }
-
-    function atualizarTabelas() {
-        const tbRua = document.querySelector('#tabela-transito tbody'); tbRua.innerHTML = '';
-        if(emTransito.length === 0) tbRua.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:#94a3b8;">Nenhum veículo na rua.</td></tr>`;
-        else {
-            emTransito.forEach(i => {
-                const diff = new Date() - i.saida;
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td data-label="Placa"><strong>${i.placa}</strong></td><td data-label="Condutor">${i.condutor}</td><td data-label="KM">${i.kmSaida}</td><td data-label="Status"><span class="badge status-rua" style="background:${i.status === 'RUA' ? '#fef3c7' : '#e0f2fe'}; color:${i.status === 'RUA' ? '#b45309' : '#0369a1'}">${i.status}</span></td><td data-label="Saída">${formatarHora(i.saida)}</td><td data-label="Tempo"><span class="badge-tempo">${calcularTempo(diff)}</span></td><td data-label="Ação"><button onclick="baixaRapida('${i.placa}')" style="background:var(--success);color:white;border:none;border-radius:8px;padding:6px 12px;cursor:pointer;font-weight:bold;">⬇️ BAIXAR</button></td>`;
-                tbRua.appendChild(tr);
-            });
-        }
-        
-        if(currentUserRole === 'admin') {
-            renderizarTabelaManutencao(); 
-            filtrarHistorico(); // Garante que o histórico seja carregado/filtrado
-            renderizarTabelaGestao(); 
-            renderizarCategoriasGestao();
-        }
-        atualizarIndicadores();
-    }
-
-    // FUNÇÕES DE GESTÃO DE CATEGORIAS (Melhoria 3)
-    window.salvarCategorias = function() {
-        localStorage.setItem('sgf_categorias_manutencao', JSON.stringify(categoriasManutencao));
-        renderizarCategoriasGestao();
-    }
-    window.renderizarCategoriasGestao = function() {
-        const lista = document.getElementById('lista-categorias');
-        if (!lista) return; 
-        lista.innerHTML = '';
-        categoriasManutencao.forEach(cat => {
-            const li = document.createElement('li');
-            li.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px dashed #eee; font-size: 0.9rem;';
-            li.innerHTML = `
-                <span>${cat}</span>
-                <button onclick="deletarCategoria('${cat}')" style="background:none; border:none; color:var(--danger); cursor:pointer;"><i class="fa-solid fa-trash-can"></i></button>
-            `;
-            lista.appendChild(li);
-        });
-    }
-    window.adicionarCategoria = function() {
-        const input = document.getElementById('input-nova-categoria');
-        const novaCat = input.value.trim();
-        if (novaCat && !categoriasManutencao.includes(novaCat)) {
-            categoriasManutencao.push(novaCat);
-            salvarCategorias();
-            input.value = '';
-            Swal.fire('Sucesso', 'Categoria adicionada!', 'success');
-        } else if (novaCat) {
-            Swal.fire('Atenção', 'Categoria já existe.', 'warning');
-        }
-    }
-    window.deletarCategoria = function(cat) {
-        if (categoriasManutencao.length <= 1) return Swal.fire('Erro', 'Deve haver pelo menos uma categoria.', 'error');
-        Swal.fire({ title: `Deletar categoria ${cat}?`, showCancelButton: true, confirmButtonColor: 'var(--danger)' }).then(r => {
-            if (r.isConfirmed) {
-                categoriasManutencao = categoriasManutencao.filter(c => c !== cat);
-                salvarCategorias();
-            }
-        });
-    }
-
-    // FUNÇÕES DE MANUTENÇÃO
-    window.renderizarTabelaManutencao = function() {
-        const txt = document.getElementById('filtro-manut-texto').value.toUpperCase();
-
-        const tbAtiva = document.querySelector('#tabela-manutencao-ativa tbody'); tbAtiva.innerHTML = '';
-        const manutencaoAtivaFiltrada = emManutencao.filter(i => (i.placa+i.categoria+i.motivo).toUpperCase().includes(txt));
-        
-        document.getElementById('count-manutencao-ativa').innerText = manutencaoAtivaFiltrada.length;
-        
-        if(manutencaoAtivaFiltrada.length === 0) {
-            tbAtiva.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:#94a3b8;">Nenhum veículo em manutenção ativa.</td></tr>`;
-        } else {
-            manutencaoAtivaFiltrada.forEach(i => {
-                const tr = document.createElement('tr');
-                const diff = new Date() - i.dataInicio;
-                tr.innerHTML = `<td><strong>${i.placa}</strong></td><td>${i.modelo}</td><td>${i.categoria || 'Geral'}</td><td>${i.motivo}</td><td>${new Date(i.dataInicio).toLocaleDateString()}</td><td>${calcularTempoParado(diff)}</td><td><button onclick="retornarDaManutencao('${i.placa}')" class="btn-action" style="background:var(--success); padding:6px 10px; font-size:0.8rem;"><i class="fa-solid fa-check"></i> BAIXAR</button></td>`;
-                tbAtiva.appendChild(tr);
-            });
-        }
-
-        const tbHistorico = document.querySelector('#tabela-manutencao-historico tbody'); tbHistorico.innerHTML = '';
-        const historicoFiltrado = historicoManutencao.filter(i => (i.placa+i.categoria+i.motivo).toUpperCase().includes(txt));
-        
-        if(historicoFiltrado.length === 0) {
-            tbHistorico.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:#94a3b8;">Nenhum registro de manutenção finalizada.</td></tr>`;
-        } else {
-            historicoFiltrado.forEach(i => {
-                const tr = document.createElement('tr');
-                const duracaoMs = i.dataFim - i.dataInicio;
-                tr.innerHTML = `<td><strong>${i.placa}</strong></td><td>${i.categoria || 'Geral'}</td><td>${i.motivo}</td><td>${new Date(i.dataInicio).toLocaleDateString()}</td><td>${new Date(i.dataFim).toLocaleDateString()}</td><td>${calcularTempoParado(duracaoMs)}</td>`;
-                tbHistorico.appendChild(tr);
-            });
-        }
-    }
-    
-    // FUNÇÕES DE DASHBOARD
-    window.atualizarDashboard = function() {
-        if(currentUserRole !== 'admin') return;
-        renderizarChartPeak();
-        renderizarChartManutencaoCat();
-        renderizarRankingKm();
-        renderizarSlaAlerts();
-    }
-    window.renderizarChartPeak = function() {
-        const peakChart = document.getElementById('chart-peak');
-        peakChart.innerHTML = '';
-        const counts = {}; 
-        for(let h=6; h<=22; h++) counts[h] = 0;
-
-        historico.forEach(i => {
-            const hour = new Date(i.saida).getHours();
-            if(hour >= 6 && hour <= 22) counts[hour]++;
-        });
-
-        const maxCount = Math.max(...Object.values(counts));
-        const range = [6, 9, 12, 15, 18, 21, 22]; // Horários para as colunas
-
-        range.forEach(hour => {
-            const count = counts[hour] || 0;
-            const height = maxCount > 0 ? (count / maxCount) * 100 : 0;
-            const col = document.createElement('div');
-            col.className = 'peak-col';
-            col.style.height = `${height}%`;
-            col.title = `${hour}h: ${count} saídas`;
-            peakChart.appendChild(col);
-        });
-    }
-    window.renderizarChartManutencaoCat = function() {
-        const container = document.getElementById('chart-manutencao-cat');
-        container.innerHTML = '';
-        const counts = historicoManutencao.reduce((acc, curr) => {
-            acc[curr.categoria] = (acc[curr.categoria] || 0) + 1;
-            return acc;
-        }, {});
-
-        const total = historicoManutencao.length;
-        if (total === 0) {
-            container.innerHTML = `<div style="text-align:center; color:#ccc; padding:30px;">Sem histórico de manutenção.</div>`;
-            return;
-        }
-
-        const sortedCats = Object.entries(counts).sort(([, a], [, b]) => b - a);
-
-        sortedCats.forEach(([cat, count]) => {
-            const percent = (count / total) * 100;
-            const row = document.createElement('div');
-            row.className = 'cat-row';
-            row.innerHTML = `
-                <span class="cat-name">${cat}</span>
-                <div class="cat-bar-bg">
-                    <div class="cat-bar-fill" style="width: ${percent.toFixed(0)}%;"></div>
-                </div>
-                <span class="cat-val">${count}</span>
-            `;
-            container.appendChild(row);
-        });
-    }
-    window.renderizarRankingKm = function() {
-        const list = document.getElementById('list-ranking-km');
-        list.innerHTML = '';
-        
-        const kmRodadosTotal = historico.reduce((acc, curr) => {
-            acc[curr.placa] = (acc[curr.placa] || 0) + curr.kmRodados;
-            return acc;
-        }, {});
-
-        const ranking = Object.entries(kmRodadosTotal)
-            .sort(([, a], [, b]) => b - a)
-            .slice(0, 5);
-
-        if (ranking.length === 0) {
-            list.innerHTML = `<div style="text-align:center; color:#ccc; padding:20px;">Sem dados de viagens no histórico.</div>`;
-            return;
-        }
-
-        ranking.forEach(([placa, km]) => {
-            const item = document.createElement('div');
-            item.className = 'rank-item';
-            item.innerHTML = `
-                <span class="rank-info">${placa}</span>
-                <span class="rank-val">${km.toLocaleString('pt-BR')} KM</span>
-            `;
-            list.appendChild(item);
-        });
-    }
-    window.renderizarSlaAlerts = function() {
-        const list = document.getElementById('list-sla-alerts');
-        list.innerHTML = '';
-        
-        const longTrips = historico
-            .filter(i => i.duracaoMs > 36000000)
-            .sort((a, b) => b.saida - a.saida)
-            .slice(0, 5); 
-
-        if (longTrips.length === 0) {
-            list.innerHTML = `<div style="text-align:center; color:#ccc; padding:20px;">Nenhum alerta recente.</div>`;
-            return;
-        }
-
-        longTrips.forEach(i => {
-            const item = document.createElement('div');
-            item.className = 'sla-item';
-            const duracao = calcularTempo(i.duracaoMs);
-            item.innerHTML = `
-                <i class="fa-solid fa-bell" style="color:var(--danger); font-size:1.5rem;"></i>
-                <div class="sla-text">
-                    <strong>${i.placa} - ${duracao}</strong>
-                    <small>Saída: ${new Date(i.saida).toLocaleDateString()} | Condutor: ${i.condutor}</small>
-                </div>
-            `;
-            list.appendChild(item);
-        });
-    }
-
-    function atualizarIndicadores() {
-        const tRua = emTransito.length; const tMan = emManutencao.length; const tGar = baseFrota.length - tRua - tMan;
-        document.getElementById('count-rua').innerText = tRua;
-        document.getElementById('count-manutencao').innerText = tMan;
-        document.getElementById('count-garagem').innerText = tGar < 0 ? 0 : tGar;
-    }
-    
-    // FUNÇÕES DE HISTÓRICO
-    window.filtrarHistorico = function() {
-        const p = document.getElementById('filtro-hist-texto').value.toUpperCase();
-        const dI = document.getElementById('filtro-data-inicio').value;
-        const dF = document.getElementById('filtro-data-fim').value;
-        const inicioTs = dI ? new Date(dI).getTime() : 0;
-        // Adiciona 1 dia (86400000 ms) para incluir o dia final completo
-        const fimTs = dF ? new Date(dF).getTime() + 86400000 : Infinity; 
-
-        historicoFiltradoCache = historico.filter(i => {
-            const dataOk = i.saida >= inicioTs && i.saida <= fimTs;
-            const textoOk = (i.placa + i.condutor + i.justificativa).toUpperCase().includes(p);
-            return dataOk && textoOk;
-        });
-
-        paginaAtual = 1;
-        renderizarHistorico();
-    }
-
-    window.renderizarHistorico = function() {
-        const tb = document.querySelector('#tabela-historico tbody'); tb.innerHTML = '';
-        const start = (paginaAtual - 1) * itensPorPagina;
-        const end = start + itensPorPagina;
-        const itens = historicoFiltradoCache.length > 0 ? historicoFiltradoCache : historico;
-        const paginaItens = itens.slice(start, end);
-        const totalPaginas = Math.ceil(itens.length / itensPorPagina);
-
-        document.getElementById('page-info').innerText = `Página ${paginaAtual} de ${totalPaginas === 0 ? 1 : totalPaginas}`;
-
-        if(paginaItens.length === 0) {
-            tb.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:#94a3b8;">Nenhum registro encontrado.</td></tr>`;
-            return;
-        }
-
-        paginaItens.forEach(i => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td data-label="Data"><strong>${new Date(i.saida).toLocaleDateString()}</strong></td>
-                <td data-label="Placa">${i.placa}</td>
-                <td data-label="Condutor">${i.condutor}</td>
-                <td data-label="KM Rodados">${i.kmRodados} km</td>
-                <td data-label="Obs">${i.justificativa || i.status}</td>
-                <td data-label="Ação" class="admin-only"><button onclick="deletarHistorico('${i.placa}', ${i.saida})" style="color:var(--danger);background:none;border:none;cursor:pointer"><i class="fa-solid fa-trash"></i></button></td>
-            `;
-            tb.appendChild(tr);
-        });
-    }
-
-    window.mudarPagina = function(delta) {
-        const itens = historicoFiltradoCache.length > 0 ? historicoFiltradoCache : historico;
-        const totalPaginas = Math.ceil(itens.length / itensPorPagina);
-        const novaPagina = paginaAtual + delta;
-
-        if (novaPagina >= 1 && novaPagina <= totalPaginas) {
-            paginaAtual = novaPagina;
-            renderizarHistorico();
-        }
-    }
-    
-    window.deletarHistorico = function(placa, saida) {
-        Swal.fire({
-            title: 'Deletar registro?',
-            text: `Placa: ${placa}, Saída: ${new Date(saida).toLocaleDateString()}`,
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonText: 'Sim, deletar',
-            confirmButtonColor: 'var(--danger)'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                // Filtra pelo item cuja placa E hora de saída coincidem
-                historico = historico.filter(item => !(item.placa === placa && item.saida === saida)); 
-                filtrarHistorico(); 
-                salvarTudo();
-                Swal.fire('Deletado!', 'O registro foi removido.', 'success');
-            }
-        });
-    }
-
-    // FUNÇÕES DE GESTÃO E EDIÇÃO RÁPIDA (Melhoria 1 e 5)
-    function renderizarTabelaGestao() {
-        const tb = document.querySelector('#tabela-gestao tbody'); tb.innerHTML = '';
-        baseFrota.forEach(i => {
-            const tr = document.createElement('tr');
-            
-            // Checagem de Revisão Proativa (Melhoria 5)
-            let alertaRevisao = '';
-            if (i.kmRevisao && i.kmAtual) {
-                const kmRestante = i.kmRevisao - i.kmAtual;
-                if (kmRestante <= 1000 && kmRestante > 0) {
-                    alertaRevisao = `<i class="fa-solid fa-triangle-exclamation" style="color:var(--warning); margin-left: 5px;" title="Revisão Próxima: ${kmRestante} km restantes"></i>`;
-                } else if (kmRestante <= 0) {
-                    alertaRevisao = `<i class="fa-solid fa-skull-crossbones" style="color:var(--danger); margin-left: 5px;" title="REVISÃO VENCIDA!"></i>`;
-                }
-            }
-            
-            tr.innerHTML = `
-                <td>${i.placa}</td>
-                <td>${i.modelo}</td>
-                <td>${i.kmAtual||0} ${alertaRevisao}</td>
-                <td>${i.kmRevisao||'-'}</td>
-                <td>
-                    <button onclick="editarVeiculo('${i.placa}')" style="color:var(--primary); background:none;border:none;cursor:pointer;margin-right:10px;"><i class="fa-solid fa-pen-to-square"></i></button>
-                    <button onclick="deletarVeiculo('${i.placa}')" style="color:var(--danger);background:none;border:none;cursor:pointer"><i class="fa-solid fa-trash"></i></button>
-                </td>
-            `;
-            tb.appendChild(tr);
-        });
-    }
-
-    // Inicia o modo de edição (Melhoria 1)
-    window.editarVeiculo = function(placa) {
-        const v = baseFrota.find(x => x.placa === placa);
-        if (!v) return;
-        
-        document.getElementById('gestao-placa').value = v.placa;
-        document.getElementById('gestao-modelo').value = v.modelo;
-        document.getElementById('gestao-condutor').value = v.condutor || '';
-        document.getElementById('gestao-km-atual').value = v.kmAtual || '';
-        document.getElementById('gestao-km-revisao').value = v.kmRevisao || '';
-
-        // Bloqueia a placa e sinaliza modo edição
-        document.getElementById('gestao-placa').readOnly = true;
-        document.getElementById('gestao-placa').style.backgroundColor = '#e2e8f0';
-        
-        document.querySelector('#aba-gestao .chart-card button.btn-action[onclick="salvarVeiculo()"]').innerHTML = 'ATUALIZAR <i class="fa-solid fa-arrows-rotate"></i>';
-
-        Swal.fire({ icon: 'info', title: 'Modo Edição', text: 'Você está editando o veículo. Clique em ATUALIZAR para salvar.', timer: 3000, showConfirmButton: false });
-    }
-
-    window.salvarVeiculo = function() {
-        const placaInput = document.getElementById('gestao-placa');
-        const p = placaInput.value.trim().toUpperCase();
-        if(!p) return Swal.fire('Erro', 'A placa é obrigatória.', 'error');
-        
-        const obj = { 
-            placa: p, 
-            modelo: document.getElementById('gestao-modelo').value.trim(), 
-            condutor: document.getElementById('gestao-condutor').value.trim(), 
-            kmAtual: parseInt(document.getElementById('gestao-km-atual').value)||0, 
-            kmRevisao: parseInt(document.getElementById('gestao-km-revisao').value)||0 
-        };
-        
-        const isEditing = placaInput.readOnly; 
-        let message = 'Salvo';
-
-        if(isEditing) {
-            const idx = baseFrota.findIndex(x=>x.placa===p);
-            if(idx!==-1) baseFrota[idx]=obj;
-            message = 'Atualizado';
-        } else {
-            if(baseFrota.find(x=>x.placa===p)) return Swal.fire('Erro', 'Placa já cadastrada.', 'error');
-            baseFrota.push(obj);
-            message = 'Criado';
-        }
-
-        salvarTudo(); 
-        limparFormGestao();
-        Swal.fire(message, '', 'success');
-    }
-
-    window.limparFormGestao = function() { 
-        document.getElementById('gestao-placa').value=""; 
-        document.getElementById('gestao-modelo').value=""; 
-        document.getElementById('gestao-condutor').value=""; 
-        document.getElementById('gestao-km-atual').value=""; 
-        document.getElementById('gestao-km-revisao').value=""; 
-        
-        // Reseta modo edição (Melhoria 1)
-        document.getElementById('gestao-placa').readOnly = false;
-        document.getElementById('gestao-placa').style.backgroundColor = '';
-        document.querySelector('#aba-gestao .chart-card button.btn-action[onclick="salvarVeiculo()"]').innerHTML = 'SALVAR <i class="fa-solid fa-floppy-disk"></i>';
-    }
-
-    window.deletarVeiculo = function(p) { Swal.fire({title:`Deletar ${p}?`, showCancelButton:true, confirmButtonColor:'var(--danger)'}).then(r=>{ if(r.isConfirmed){ baseFrota=baseFrota.filter(x=>x.placa!==p); salvarTudo(); }}); }
-    
-    // FUNÇÃO PRINCIPAL DE SALVAR
-    function salvarTudo() {
-        localStorage.setItem('frota_base_v3', JSON.stringify(baseFrota));
-        localStorage.setItem('frota_em_transito_v3', JSON.stringify(emTransito));
-        localStorage.setItem('frota_manutencao_v3', JSON.stringify(emManutencao));
-        localStorage.setItem('frota_historico_v3', JSON.stringify(historico));
-        localStorage.setItem('frota_historico_manutencao_v3', JSON.stringify(historicoManutencao)); 
-        salvarCategorias(); 
-        atualizarTabelas();
-    }
-    
-    function atualizarRelogio() { document.getElementById('relogio').innerText = new Date().toLocaleTimeString(); }
-    function formatarHora(ts) { return new Date(ts).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}); }
-    function calcularTempo(ms) { const h=Math.floor(ms/3600000), m=Math.round((ms%3600000)/60000); return `${h}h ${m}m`; }
-    function calcularTempoParado(ms) { const d=Math.floor(ms/86400000); const h=Math.floor((ms%86400000)/3600000); const m=Math.round((ms%3600000)/60000); if(d>0) return `${d}d ${h}h`; return `${h}h ${m}m`; }
-    function filtrarTabela(id, txt) { document.querySelectorAll(`#${id} tbody tr`).forEach(r => r.style.display = r.innerText.toUpperCase().includes(txt.toUpperCase()) ? '' : 'none'); }
-    
-    window.mudarAba = function(n) {
-        document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('show')); document.getElementById('aba-'+n).classList.add('show');
-        document.querySelectorAll('.tab-btn, .nav-item').forEach(x=>x.classList.remove('active'));
-        document.querySelectorAll(`[onclick="mudarAba('${n}')"]`).forEach(x=>x.classList.add('active'));
-        if(n === 'dashboard' && currentUserRole === 'admin') atualizarDashboard();
-        if(n === 'manutencao' && currentUserRole === 'admin') renderizarTabelaManutencao(); 
-        if(n === 'gestao' && currentUserRole === 'admin') limparFormGestao();
-        if(n === 'historico' && currentUserRole === 'admin') filtrarHistorico();
-        atualizarTabelas();
-    }
-    
-    window.baixaRapida = function(p) { selectPlaca.value=p; preencherDados(); registrarEntrada(); }
-
-    window.baixarBackup = function() { 
-        const dataToSave = {
-            frota: baseFrota, 
-            transito: emTransito, 
-            manutencao: emManutencao, 
-            historico: historico,
-            manutencaoHistorico: historicoManutencao,
-            categorias: categoriasManutencao
-        };
-        const a=document.createElement('a'); 
-        a.href="data:text/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(dataToSave)); 
-        a.download="backup.json"; 
-        a.click(); 
-    }
-    window.processarRestauracao = function(i) { 
-        const r=new FileReader(); 
-        r.onload=e=>{ 
-            const d=JSON.parse(e.target.result); 
-            if(d.frota){ 
-                baseFrota=d.frota; 
-                emTransito=d.transito; 
-                emManutencao=d.manutencao; 
-                historico=d.historico; 
-                historicoManutencao=d.manutencaoHistorico || []; 
-                categoriasManutencao=d.categorias || ['Mecânica', 'Elétrica', 'Pneus', 'Funilaria', 'Revisão', 'Outros'];
-                salvarTudo(); 
-                location.reload(); 
-            }
-        }; 
-        r.readAsText(i.files[0]); 
-    }
-   window.exportarExcel = function() {
-        // O caractere \ufeff ajuda o Excel a reconhecer o arquivo como UTF-8
-        let csvContent = "\ufeffsep=;\n"; 
-        csvContent += "Data;Placa;Condutor;KM Rodados;Tempo Viagem;Obs\n";
-
-        // Percorre o histórico real do seu sistema
-        historico.forEach(item => {
-            const linha = `${item.data};${item.placa};${item.condutor};${item.km};${item.tempo};${item.obs}\n`;
-            csvContent += linha;
-        });
-
-        // Especifica o tipo com charset utf-8
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
-        
         const a = document.createElement("a");
         a.href = url;
-        a.download = "Historico_Frota.csv";
-        document.body.appendChild(a); // Adiciona ao corpo para garantir funcionamento em todos browsers
+        a.download = "Relatorio_Frota.csv";
         a.click();
-        document.body.removeChild(a);
-        
-        URL.revokeObjectURL(url);
     };
+
+    // Inicialização do relógio
+    setInterval(() => {
+        const now = new Date();
+        const r = document.getElementById('relogio');
+        if(r) r.innerText = now.toLocaleTimeString();
+    }, 1000);
+
 </script>
 </body>
 </html>
