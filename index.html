@@ -343,7 +343,7 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script type="module">
-   // --- 1. CONFIGURAÇÃO FIREBASE ---
+    // --- 1. CONFIGURAÇÃO E IMPORTAÇÃO FIREBASE ---
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getDatabase, ref, push, onValue, set, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
@@ -360,6 +360,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     
+    // Referências das "Pastas" na Nuvem
     const baseFrotaRef = ref(db, 'baseFrota');
     const emTransitoRef = ref(db, 'emTransito');
     const historicoRef = ref(db, 'historico');
@@ -369,6 +370,8 @@
     window.baseFrota = [];
     window.emTransito = [];
     window.historico = [];
+    window.emManutencao = []; 
+    window.categoriasManutencao = ['Mecânica', 'Elétrica', 'Pneus', 'Funilaria', 'Revisão', 'Outros'];
 
     const selectPlaca = document.getElementById('select-placa');
     const inputModelo = document.getElementById('input-modelo');
@@ -376,16 +379,18 @@
     const inputKmSaida = document.getElementById('input-km-saida');
     const inputJustificativa = document.getElementById('input-justificativa');
 
-    // --- 3. SINCRONIZAÇÃO EM TEMPO REAL ---
+    // --- 3. SINCRONIZAÇÃO EM TEMPO REAL (Ouvintes) ---
     onValue(baseFrotaRef, (snapshot) => {
         const data = snapshot.val();
-        window.baseFrota = data ? (Array.isArray(data) ? data : Object.values(data)) : [];
+        // Se o banco estiver vazio, inicia com o Fiorino padrão
+        window.baseFrota = data ? Object.values(data) : [{ placa: "TDS7I49", modelo: "FIORINO", condutor: "Gabriel", kmAtual: 45000, kmRevisao: 50000 }];
         window.carregarSelect(); 
         window.atualizarTabelas();
     });
 
     onValue(emTransitoRef, (snapshot) => {
         const data = snapshot.val();
+        // Mapeamos os dados com a chave do Firebase para facilitar a exclusão na volta
         window.emTransito = data ? Object.keys(data).map(key => ({...data[key], firebaseKey: key})) : [];
         window.atualizarTabelas();
     });
@@ -394,9 +399,11 @@
         const data = snapshot.val();
         window.historico = data ? Object.values(data) : [];
         window.atualizarTabelas();
+        window.atualizarDashboard();
     });
 
-    // --- 4. FUNÇÕES DE INTERFACE ---
+    // --- 4. FUNÇÕES DO SISTEMA (Com vínculo window para botões HTML) ---
+
     window.login = function(role) {
         if(role === 'motorista') { 
             window.currentUserRole = 'motorista'; 
@@ -412,15 +419,6 @@
         }
     };
 
-    window.mostrarInputAdmin = function() {
-        document.getElementById('admin-pass').style.display = 'block';
-        document.getElementById('admin-pass').focus();
-    };
-
-    window.checkAdminPass = function(e) {
-        if(e.key === 'Enter') window.login('admin');
-    };
-
     window.iniciarSistema = function() {
         document.getElementById('login-screen').style.display = 'none';
         document.querySelector('.container').style.display = 'block';
@@ -429,28 +427,14 @@
         window.mudarAba('monitoramento');
     };
 
-    window.logout = function() { location.reload(); };
-
-    window.mudarAba = function(aba) {
-        // Correção aqui: usando .tab-content para coincidir com seu HTML
-        document.querySelectorAll('.tab-content').forEach(a => a.style.display = 'none');
-        const target = document.getElementById(`aba-${aba}`);
-        if(target) target.style.display = 'block';
-        
-        // Atualiza estado dos botões da nav
-        document.querySelectorAll('.nav-item, .tab-btn').forEach(b => b.classList.remove('active'));
-    };
-
     window.carregarSelect = function() {
         if(!selectPlaca) return;
-        const valAnterior = selectPlaca.value;
         selectPlaca.innerHTML = '<option value="">-- Toque para selecionar --</option>';
         window.baseFrota.sort((a,b)=>a.placa.localeCompare(b.placa)).forEach(v => {
             const opt = document.createElement('option');
             opt.value = v.placa; opt.text = `${v.placa} - ${v.modelo}`;
             selectPlaca.appendChild(opt);
         });
-        selectPlaca.value = valAnterior;
     };
 
     window.preencherDados = function() {
@@ -458,20 +442,18 @@
         if(!placa) return window.limparForm();
         const v = window.baseFrota.find(x => x.placa === placa);
         if(!v) return;
-        
-        const t = window.emTransito.find(x => x.placa === placa);
         inputModelo.value = v.modelo;
-        inputCondutor.value = t ? t.condutor : (v.condutor || '');
+        const t = window.emTransito.find(x => x.placa === placa);
+        inputCondutor.value = t ? t.condutor : v.condutor;
         inputKmSaida.value = t ? t.kmSaida : (v.kmAtual || '');
         inputKmSaida.readOnly = !!t;
         
-        let statusHTML = t ? '<span class="badge status-rua"><i class="fa-solid fa-road"></i> EM TRÂNSITO</span>' : 
-                             '<span class="badge status-disp" style="background:#dcfce7; color:#15803d"><i class="fa-solid fa-check"></i> DISPONÍVEL</span>';
+        let statusHTML = t ? '<span class="badge" style="background:#fef3c7; color:#b45309">EM TRÂNSITO</span>' : '<span class="badge" style="background:#dcfce7; color:#15803d">DISPONÍVEL</span>';
         document.getElementById('status-texto').innerHTML = statusHTML;
     };
 
-    window.registrarSaida = function(tipo) {
-        if(!selectPlaca.value || !inputKmSaida.value) return Swal.fire('Erro', 'Selecione veículo e KM', 'error');
+    window.registrarSaida = function() {
+        if(!selectPlaca.value || !inputKmSaida.value) return Swal.fire('Erro', 'Preencha os campos!', 'error');
         
         const novaSaida = {
             placa: selectPlaca.value,
@@ -479,106 +461,78 @@
             condutor: inputCondutor.value,
             kmSaida: parseInt(inputKmSaida.value),
             saida: new Date().toISOString(),
-            justificativa: inputJustificativa.value || '',
-            status: tipo
+            status: 'em_trânsito'
         };
 
         push(emTransitoRef, novaSaida).then(() => {
-            Swal.fire('Sucesso', 'Saída confirmada!', 'success');
+            Swal.fire('Sucesso', 'Veículo em trânsito (Nuvem)', 'success');
             window.limparForm();
         });
     };
 
     window.registrarEntrada = function() {
         const item = window.emTransito.find(x => x.placa === selectPlaca.value);
-        if(!item) return Swal.fire('Erro', 'Veículo não consta como em trânsito.', 'error');
+        if(!item) return Swal.fire('Erro', 'Veículo não está em trânsito', 'error');
 
         Swal.fire({
-            title: 'Baixa de Veículo',
-            html: `Placa: ${item.placa}<br>KM Saída: ${item.kmSaida}<br>Digite a KM de Chegada:`,
+            title: 'KM de Chegada',
             input: 'number',
             showCancelButton: true
         }).then((res) => {
             if(res.isConfirmed) {
                 const kmChegada = parseInt(res.value);
-                if(kmChegada < item.kmSaida) return Swal.fire('Erro', 'KM de chegada menor que a de saída!', 'error');
-
-                const historicoDados = {
+                const viagemFinalizada = {
                     ...item,
-                    kmChegada,
+                    kmChegada: kmChegada,
                     chegada: new Date().toISOString(),
                     kmRodados: kmChegada - item.kmSaida
                 };
-                delete historicoDados.firebaseKey;
+                delete viagemFinalizada.firebaseKey; // Limpa a chave temporária
 
-                push(historicoRef, historicoDados).then(() => {
+                // 1. Salva no histórico
+                push(historicoRef, viagemFinalizada).then(() => {
+                    // 2. Remove da lista de trânsito usando a chave salva
                     remove(ref(db, `emTransito/${item.firebaseKey}`));
-                    
-                    // Atualiza KM na base frota
-                    const vIndex = window.baseFrota.findIndex(v => v.placa === item.placa);
-                    if(vIndex !== -1) {
-                        set(ref(db, `baseFrota/${vIndex}/kmAtual`), kmChegada);
-                    }
-
-                    Swal.fire('Sucesso', 'Veículo liberado!', 'success');
-                    window.limparForm();
+                    Swal.fire('Finalizado', 'Viagem salva no histórico!', 'success');
                 });
             }
         });
     };
 
-    window.atualizarTabelas = function() {
-        const tbody = document.querySelector('#tabela-transito tbody');
-        if(!tbody) return;
-        tbody.innerHTML = '';
-
-        window.emTransito.forEach(item => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td data-label="Placa">${item.placa}</td>
-                <td data-label="Condutor">${item.condutor}</td>
-                <td data-label="KM">${item.kmSaida}</td>
-                <td data-label="Status"><span class="badge status-rua">${item.status}</span></td>
-                <td data-label="Saída">${new Date(item.saida).toLocaleTimeString()}</td>
-                <td data-label="Tempo">-</td>
-                <td><button class="badge" style="background:var(--primary); color:white; border:none; cursor:pointer" onclick="window.selecionarVeiculo('${item.placa}')">Selecionar</button></td>
-            `;
-            tbody.appendChild(tr);
-        });
-
-        document.getElementById('count-rua').innerText = window.emTransito.length;
-        document.getElementById('count-garagem').innerText = window.baseFrota.length - window.emTransito.length;
-    };
-
-    window.selecionarVeiculo = function(placa) {
-        selectPlaca.value = placa;
-        window.preencherDados();
-        window.mudarAba('monitoramento');
+    window.mudarAba = function(aba) {
+        document.querySelectorAll('.aba-content').forEach(a => a.style.display = 'none');
+        document.getElementById(`aba-${aba}`).style.display = 'block';
     };
 
     window.limparForm = function() {
-        if(selectPlaca) selectPlaca.value = "";
+        selectPlaca.value = "";
         inputModelo.value = "";
         inputCondutor.value = "";
         inputKmSaida.value = "";
-        inputJustificativa.value = "";
         inputKmSaida.readOnly = false;
         document.getElementById('status-texto').innerText = "Aguardando seleção...";
     };
 
-    window.atualizarDashboard = function() {
-        // Implementar lógica de gráficos aqui se necessário
-        console.log("Dashboard atualizado");
+    window.exportarExcel = function() {
+        let csvContent = "\ufeffsep=;\nData;Placa;Condutor;KM Saída;KM Chegada;KM Rodados\n";
+        window.historico.forEach(item => {
+            csvContent += `${new Date(item.saida).toLocaleDateString()};${item.placa};${item.condutor};${item.kmSaida};${item.kmChegada};${item.kmRodados}\n`;
+        });
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "Relatorio_Frota.csv";
+        a.click();
     };
 
     // Inicialização do relógio
     setInterval(() => {
+        const now = new Date();
         const r = document.getElementById('relogio');
-        if(r) r.innerText = new Date().toLocaleTimeString();
+        if(r) r.innerText = now.toLocaleTimeString();
     }, 1000);
-    
+
 </script>
 </body>
 </html>
-    
-
