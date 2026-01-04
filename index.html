@@ -341,22 +341,46 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script>
-    let currentUserRole = null;
-    const initialBaseFrota = [{ placa: "TDS7I49", modelo: "FIORINO", condutor: "Gabriel", kmAtual: 45000, kmRevisao: 50000 }];
-    let baseFrota = JSON.parse(localStorage.getItem('frota_base_v3')) || initialBaseFrota;
-    let emTransito = JSON.parse(localStorage.getItem('frota_em_transito_v3')) || [];
-    let emManutencao = JSON.parse(localStorage.getItem('frota_manutencao_v3')) || [];
-    let historico = JSON.parse(localStorage.getItem('frota_historico_v3')) || [];
-    let historicoManutencao = JSON.parse(localStorage.getItem('frota_historico_manutencao_v3')) || [];
-    
-    // NOVO: Categorias de Manutenção (Melhoria 3)
-    let categoriasManutencao = JSON.parse(localStorage.getItem('sgf_categorias_manutencao')) || ['Mecânica', 'Elétrica', 'Pneus', 'Funilaria', 'Revisão', 'Outros'];
+<script type="module">
+// --- 1. CONFIGURAÇÃO FIREBASE ---
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref, push, onValue, set, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-    let paginaAtual = 1; 
-    const itensPorPagina = 10; 
-    let historicoFiltradoCache = [];
+const firebaseConfig = {
+    apiKey: "AIzaSyAR87299J4SWl8qz9zX9_cNjJMoiXfRdDc",
+    authDomain: "aegea-21b34.firebaseapp.com",
+    databaseURL: "https://aegea-21b34-default-rtdb.firebaseio.com",
+    projectId: "aegea-21b34",
+    storageBucket: "aegea-21b34.firebasestorage.app",
+    messagingSenderId: "205645361536",
+    appId: "1:205645361536:web:5223c969f8441b213c1165"
+};
 
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// Referências globais
+const baseFrotaRef = ref(db, 'baseFrota');
+const emTransitoRef = ref(db, 'emTransito');
+const historicoRef = ref(db, 'historico');
+
+// --- 2. OUVINTE TEMPO REAL ---
+// Este bloco substitui o localStorage e atualiza o site sozinho
+onValue(ref(db), (snapshot) => {
+    const data = snapshot.val();
+    if (!data) return;
+
+    window.baseFrota = data.baseFrota ? Object.values(data.baseFrota) : [];
+    window.emTransito = data.emTransito ? 
+        Object.keys(data.emTransito).map(key => ({...data.emTransito[key], firebaseKey: key})) : [];
+    window.historico = data.historico ? Object.values(data.historico) : [];
+
+    // Dispara as funções de atualização que já existem no seu código
+    if (typeof window.carregarSelect === "function") window.carregarSelect();
+    if (typeof window.atualizarTabelas === "function") window.atualizarTabelas();
+});
+
+// --- CONTINUAÇÃO DO SEU CÓDIGO (VARIÁVEIS DE ELEMENTOS) ---
     const selectPlaca = document.getElementById('select-placa');
     const inputModelo = document.getElementById('input-modelo');
     const inputCondutor = document.getElementById('input-condutor');
@@ -423,53 +447,80 @@
         document.getElementById('status-box').style.backgroundColor = boxColor;
     }
 
-    window.registrarSaida = function(tipo) {
-        if(!selectPlaca.value) return Swal.fire('Ops', 'Selecione um veículo', 'warning');
-        if(!inputKmSaida.value) return Swal.fire('Ops', 'Informe a KM', 'warning');
-        if(!inputCondutor.value) return Swal.fire('Ops', 'Informe o condutor', 'warning');
-        if(emTransito.find(x=>x.placa === selectPlaca.value)) return Swal.fire('Erro', 'Veículo já saiu!', 'error');
-        if(emManutencao.find(x=>x.placa === selectPlaca.value)) return Swal.fire('Erro', 'Veículo em manutenção!', 'error');
-        
-        // Atualiza o KM atual na base antes de sair
-        const v = baseFrota.find(x => x.placa === selectPlaca.value);
-        if(v) v.kmAtual = parseInt(inputKmSaida.value);
-
-        emTransito.push({
-            placa: selectPlaca.value, modelo: inputModelo.value, condutor: inputCondutor.value,
-            kmSaida: parseInt(inputKmSaida.value), status: tipo, justificativa: inputJustificativa.value,
-            saida: new Date().getTime()
-        });
-        salvarTudo();
-        Swal.fire({icon: 'success', title: 'Saída Registrada', timer: 1500, showConfirmButton: false});
-        limparForm();
+    window.registrarSaida = function() {
+    // Validação básica (ajuste os IDs se forem diferentes no seu HTML)
+    if(!selectPlaca.value || !inputKmSaida.value || !inputCondutor.value) {
+        return Swal.fire('Erro', 'Preencha Placa, Condutor e KM!', 'error');
     }
+    
+    const novaSaida = {
+        placa: selectPlaca.value,
+        modelo: inputModelo.value,
+        condutor: inputCondutor.value,
+        kmSaida: parseInt(inputKmSaida.value),
+        saida: new Date().toISOString(),
+        status: 'em_trânsito'
+    };
+
+    // 'emTransitoRef' é a referência que definimos na inicialização
+    push(emTransitoRef, novaSaida).then(() => {
+        Swal.fire('Sucesso', 'Veículo em trânsito (Nuvem)', 'success');
+        if(typeof window.limparForm === "function") window.limparForm();
+    }).catch(error => {
+        Swal.fire('Erro', 'Falha ao salvar na nuvem: ' + error.message, 'error');
+    });
+};
 
     window.registrarEntrada = function() {
-        if(!selectPlaca.value) return Swal.fire('Ops', 'Selecione um veículo', 'warning');
-        const item = emTransito.find(x=>x.placa === selectPlaca.value);
-        if(!item) return Swal.fire('Erro', 'Veículo não consta como SAÍDA.', 'error');
-        Swal.fire({
-            title: 'Baixa de Veículo',
-            html: `KM Saída: <b>${item.kmSaida}</b><br>Informe a KM de Chegada:`,
-            input: 'number',
-            showCancelButton: true,
-            confirmButtonColor: 'var(--success)',
-            confirmButtonText: 'Confirmar Baixa'
-        }).then((res) => {
-            if(res.isConfirmed) {
-                const kmChegada = parseInt(res.value);
-                if (!kmChegada || kmChegada < item.kmSaida) return Swal.fire('Erro', 'KM Inválida!', 'error');
-                const kmRodados = kmChegada - item.kmSaida;
-                const idx = baseFrota.findIndex(v => v.placa === item.placa);
-                if(idx !== -1) baseFrota[idx].kmAtual = kmChegada;
-                historico.unshift({...item, chegada: new Date().getTime(), kmChegada, kmRodados, duracaoMs: new Date().getTime() - item.saida});
-                emTransito = emTransito.filter(x => x.placa !== item.placa);
-                salvarTudo();
-                Swal.fire('Sucesso!', `Veículo baixado. Rodou ${kmRodados} Km.`, 'success');
-                limparForm();
+    // Busca o veículo na lista 'window.emTransito' (que o onValue mantém atualizada)
+    const item = window.emTransito.find(x => x.placa === selectPlaca.value);
+    
+    if(!item) return Swal.fire('Erro', 'Este veículo não consta como EM TRÂNSITO na nuvem', 'error');
+
+    Swal.fire({
+        title: 'KM de Chegada',
+        input: 'number',
+        inputLabel: `KM de Saída foi: ${item.kmSaida}`,
+        showCancelButton: true,
+        confirmButtonText: 'Finalizar Viagem',
+        cancelButtonText: 'Cancelar'
+    }).then((res) => {
+        if(res.isConfirmed) {
+            const kmChegada = parseInt(res.value);
+            
+            if(kmChegada < item.kmSaida) {
+                return Swal.fire('Erro', 'KM de chegada não pode ser menor que o de saída!', 'error');
             }
-        });
-    }
+
+            const viagemFinalizada = {
+                ...item,
+                kmChegada: kmChegada,
+                chegada: new Date().toISOString(),
+                kmRodados: kmChegada - item.kmSaida
+            };
+
+            // Guardamos a chave para deletar o registro de trânsito
+            const chaveFirebase = item.firebaseKey;
+            delete viagemFinalizada.firebaseKey; // Removemos a chave antes de salvar no histórico
+
+            // 1. Salva no Histórico
+            push(historicoRef, viagemFinalizada).then(() => {
+                // 2. Remove da lista de trânsito usando a chave única
+                remove(ref(db, `emTransito/${chaveFirebase}`));
+                
+                // 3. Opcional: Atualiza o KM atual na Base da Frota
+                // Procure o index do veículo na base local para atualizar na nuvem
+                const vIndex = window.baseFrota.findIndex(v => v.placa === item.placa);
+                if(vIndex !== -1) {
+                    set(ref(db, `baseFrota/${vIndex}/kmAtual`), kmChegada);
+                }
+
+                Swal.fire('Finalizado', 'Viagem encerrada com sucesso!', 'success');
+                if(typeof window.limparForm === "function") window.limparForm();
+            });
+        }
+    });
+};
 
     function limparForm() {
         selectPlaca.value = '';
