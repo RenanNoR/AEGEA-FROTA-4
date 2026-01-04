@@ -1,37 +1,223 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Teste Reset</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEGEA FROTA - Sistema de Controle</title>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root { --primary: #004a99; --secondary: #00a1e4; --bg: #f4f7f9; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 0; }
+        .header { background: var(--primary); color: white; padding: 15px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .container { max-width: 800px; margin: 20px auto; padding: 10px; display: none; }
+        .card { background: white; border-radius: 8px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .tab-content { display: none; }
+        input, select, textarea { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 16px; }
+        button { width: 100%; padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 16px; margin-top: 10px; }
+        .btn-saida { background: #f59e0b; color: white; }
+        .btn-entrada { background: #10b981; color: white; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+        .nav-bar { display: flex; justify-content: space-around; background: white; padding: 10px; position: fixed; bottom: 0; width: 100%; border-top: 1px solid #ddd; }
+        .nav-item { text-align: center; color: #666; text-decoration: none; font-size: 12px; }
+        .nav-item i { font-size: 20px; display: block; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background: #f8f9fa; }
+        #login-screen { text-align: center; padding: 50px 20px; }
+    </style>
 </head>
 <body>
-    <h1>TESTE DE CONEXÃO</h1>
-    <button onclick="enviarTeste()" style="padding: 20px; font-size: 20px;">TESTAR FIREBASE</button>
 
-    <script type="module">
-        alert("O CÓDIGO RODOU!"); // Isso TEM que aparecer ao abrir
+<div id="login-screen">
+    <img src="https://logodownload.org/wp-content/uploads/2021/03/aegea-logo.png" width="150" alt="Aegea">
+    <h2>Controle de Frota</h2>
+    <button onclick="login('motorista')" style="background:var(--primary); color:white">Acessar Sistema</button>
+</div>
 
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+<div class="container">
+    <div class="header">
+        <h2 style="margin:0">AEGEA FROTA</h2>
+        <div id="relogio" style="font-size: 14px; opacity: 0.8;">00:00:00</div>
+    </div>
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyAR87299J4SWl8qz9zX9_cNjJMoiXfRdDc",
-            authDomain: "aegea-21b34.firebaseapp.com",
-            databaseURL: "https://aegea-21b34-default-rtdb.firebaseio.com",
-            projectId: "aegea-21b34",
-            storageBucket: "aegea-21b34.firebasestorage.app",
-            messagingSenderId: "205645361536",
-            appId: "1:205645361536:web:5223c969f8441b213c1165"
-        };
+    <div id="aba-monitoramento" class="tab-content">
+        <div class="card">
+            <h3>Registrar Movimentação</h3>
+            <select id="select-placa" onchange="preencherDados()">
+                <option value="">-- Selecione o Veículo --</option>
+            </select>
+            <div id="status-texto" style="font-weight:bold; margin: 5px 0;">Aguardando seleção...</div>
+            <input type="text" id="input-modelo" placeholder="Modelo" readonly>
+            <input type="text" id="input-condutor" placeholder="Nome do Condutor">
+            <input type="number" id="input-km-saida" placeholder="KM Atual">
+            
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-saida" onclick="registrarSaida('RUA')">Registrar Saída</button>
+                <button class="btn-entrada" onclick="registrarEntrada()">Dar Baixa</button>
+            </div>
+        </div>
+    </div>
 
-        const app = initializeApp(firebaseConfig);
-        const db = getDatabase(app);
+    <div id="aba-lista" class="tab-content">
+        <div class="card">
+            <h3>Veículos em Trânsito</h3>
+            <div id="lista-veiculos">
+                <table id="tabela-transito">
+                    <thead>
+                        <tr>
+                            <th>Placa</th>
+                            <th>Condutor</th>
+                            <th>Saída</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
-        window.enviarTeste = function() {
-            set(ref(db, 'teste_direto'), { msg: "Funcionou!", hora: new Date().toISOString() })
-                .then(() => alert("SUCESSO! OLHE O CONSOLE DO FIREBASE"))
-                .catch(e => alert("ERRO: " + e.message));
+    <div style="height: 70px;"></div> </div>
+
+<div class="nav-bar" id="menu-inferior" style="display:none">
+    <a href="#" class="nav-item" onclick="mudarAba('monitoramento')"><i class="fa fa-car"></i>Início</a>
+    <a href="#" class="nav-item" onclick="mudarAba('lista')"><i class="fa fa-list"></i>Trânsito</a>
+    <a href="#" class="nav-item" onclick="location.reload()"><i class="fa fa-sync"></i>Sair</a>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getDatabase, ref, push, set, onValue, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyAR87299J4SWl8qz9zX9_cNjJMoiXfRdDc",
+        authDomain: "aegea-21b34.firebaseapp.com",
+        databaseURL: "https://aegea-21b34-default-rtdb.firebaseio.com",
+        projectId: "aegea-21b34",
+        storageBucket: "aegea-21b34.firebasestorage.app",
+        messagingSenderId: "205645361536",
+        appId: "1:205645361536:web:5223c969f8441b213c1165"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    window.baseFrota = [];
+    window.emTransito = [];
+
+    // --- SINCRONIZAÇÃO EM TEMPO REAL ---
+    onValue(ref(db), (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            window.baseFrota = data.baseFrota ? Object.values(data.baseFrota) : [];
+            window.emTransito = data.emTransito ? 
+                Object.keys(data.emTransito).map(key => ({...data.emTransito[key], firebaseKey: key})) : [];
+            
+            atualizarSelect();
+            atualizarTabela();
         }
-    </script>
+    });
+
+    window.login = function(role) {
+        document.getElementById('login-screen').style.display = 'none';
+        document.querySelector('.container').style.display = 'block';
+        document.getElementById('menu-inferior').style.display = 'flex';
+        window.mudarAba('monitoramento');
+    };
+
+    window.mudarAba = function(aba) {
+        document.querySelectorAll('.tab-content').forEach(d => d.style.display = 'none');
+        document.getElementById('aba-' + aba).style.display = 'block';
+    };
+
+    function atualizarSelect() {
+        const sel = document.getElementById('select-placa');
+        const atual = sel.value;
+        sel.innerHTML = '<option value="">-- Selecione o Veículo --</option>';
+        window.baseFrota.forEach(v => {
+            const opt = document.createElement('option');
+            opt.value = v.placa;
+            opt.text = v.placa + " - " + v.modelo;
+            sel.appendChild(opt);
+        });
+        sel.value = atual;
+    }
+
+    window.preencherDados = function() {
+        const placa = document.getElementById('select-placa').value;
+        const v = window.baseFrota.find(x => x.placa === placa);
+        const t = window.emTransito.find(x => x.placa === placa);
+        
+        if (v) {
+            document.getElementById('input-modelo').value = v.modelo;
+            document.getElementById('input-km-saida').value = t ? t.kmSaida : (v.kmAtual || "");
+            document.getElementById('input-condutor').value = t ? t.condutor : "";
+            document.getElementById('status-texto').innerHTML = t ? 
+                '<span style="color:orange">EM TRÂNSITO</span>' : '<span style="color:green">DISPONÍVEL</span>';
+        }
+    };
+
+    window.registrarSaida = function(tipo) {
+        const placa = document.getElementById('select-placa').value;
+        const condutor = document.getElementById('input-condutor').value;
+        const km = document.getElementById('input-km-saida').value;
+
+        if (!placa || !condutor || !km) return Swal.fire("Erro", "Preencha todos os campos", "error");
+
+        const novo = { placa, condutor, kmSaida: parseInt(km), saida: new Date().toISOString(), status: tipo };
+        
+        push(ref(db, 'emTransito'), novo).then(() => {
+            Swal.fire("Sucesso", "Saída registrada!", "success");
+            limpar();
+        });
+    };
+
+    window.registrarEntrada = function() {
+        const placa = document.getElementById('select-placa').value;
+        const item = window.emTransito.find(x => x.placa === placa);
+        
+        if (!item) return Swal.fire("Erro", "Veículo não está em trânsito", "error");
+
+        Swal.fire({
+            title: 'KM de Chegada',
+            input: 'number',
+            showCancelButton: true
+        }).then(res => {
+            if (res.isConfirmed) {
+                const kmChegada = parseInt(res.value);
+                const historico = { ...item, kmChegada, chegada: new Date().toISOString() };
+                delete historico.firebaseKey;
+
+                push(ref(db, 'historico'), historico).then(() => {
+                    remove(ref(db, `emTransito/${item.firebaseKey}`));
+                    Swal.fire("Finalizado", "Viagem registrada!", "success");
+                    limpar();
+                });
+            }
+        });
+    };
+
+    function atualizarTabela() {
+        const tbody = document.querySelector('#tabela-transito tbody');
+        tbody.innerHTML = '';
+        window.emTransito.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${item.placa}</td><td>${item.condutor}</td><td>${new Date(item.saida).toLocaleTimeString()}</td>`;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function limpar() {
+        document.getElementById('select-placa').value = "";
+        document.getElementById('input-modelo').value = "";
+        document.getElementById('input-condutor').value = "";
+        document.getElementById('input-km-saida').value = "";
+        document.getElementById('status-texto').innerText = "Aguardando seleção...";
+    }
+
+    setInterval(() => {
+        document.getElementById('relogio').innerText = new Date().toLocaleTimeString();
+    }, 1000);
+</script>
 </body>
 </html>
