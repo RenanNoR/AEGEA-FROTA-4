@@ -342,248 +342,40 @@
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script type="module">
-   // --- 1. CONFIGURAÇÃO FIREBASE ---
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getDatabase, ref, push, onValue, set, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-window.onerror = function(msg, url, line) {
-    Swal.fire('Erro Detectado', msg + " na linha: " + line, 'error');
-};
-    const firebaseConfig = {
-        apiKey: "AIzaSyAR87299J4SWl8qz9zX9_cNjJMoiXfRdDc",
-        authDomain: "aegea-21b34.firebaseapp.com",
-        databaseURL: "https://aegea-21b34-default-rtdb.firebaseio.com",
-        projectId: "aegea-21b34",
-        storageBucket: "aegea-21b34.firebasestorage.app",
-        messagingSenderId: "205645361536",
-        appId: "1:205645361536:web:5223c969f8441b213c1165"
-    };
+   // Diagnóstico Máximo
+alert("Passo 1: Script carregado");
 
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+alert("Passo 2: Bibliotecas importadas");
+
+const firebaseConfig = {
+    apiKey: "AIzaSyAR87299J4SWl8qz9zX9_cNjJMoiXfRdDc",
+    authDomain: "aegea-21b34.firebaseapp.com",
+    databaseURL: "https://aegea-21b34-default-rtdb.firebaseio.com",
+    projectId: "aegea-21b34",
+    storageBucket: "aegea-21b34.firebasestorage.app",
+    messagingSenderId: "205645361536",
+    appId: "1:205645361536:web:5223c969f8441b213c1165"
+};
+
+try {
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
-    // Teste de conexão imediato
-console.log("Tentando conectar...");
-const testRef = ref(db, "conexao_teste");
-set(testRef, { hora: new Date().toISOString() })
-    .then(() => alert("CONECTADO AO FIREBASE!"))
-    .catch(e => alert("ERRO DE CONEXÃO: " + e.message));
-    
-    const baseFrotaRef = ref(db, 'baseFrota');
-    const emTransitoRef = ref(db, 'emTransito');
-    const historicoRef = ref(db, 'historico');
+    alert("Passo 3: Firebase inicializado");
 
-    // --- 2. VARIÁVEIS GLOBAIS ---
-    window.currentUserRole = null;
-    window.baseFrota = [];
-    window.emTransito = [];
-    window.historico = [];
-
-    const selectPlaca = document.getElementById('select-placa');
-    const inputModelo = document.getElementById('input-modelo');
-    const inputCondutor = document.getElementById('input-condutor');
-    const inputKmSaida = document.getElementById('input-km-saida');
-    const inputJustificativa = document.getElementById('input-justificativa');
-
-    // --- 3. SINCRONIZAÇÃO EM TEMPO REAL ---
-    onValue(baseFrotaRef, (snapshot) => {
-        const data = snapshot.val();
-        window.baseFrota = data ? (Array.isArray(data) ? data : Object.values(data)) : [];
-        window.carregarSelect(); 
-        window.atualizarTabelas();
+    set(ref(db, 'teste_celular'), { 
+        status: "Funcionando", 
+        data: new Date().toISOString() 
+    }).then(() => {
+        alert("FINAL: DADO GRAVADO NO FIREBASE!");
+    }).catch(e => {
+        alert("ERRO NO FIREBASE: " + e.message);
     });
-
-    onValue(emTransitoRef, (snapshot) => {
-        const data = snapshot.val();
-        window.emTransito = data ? Object.keys(data).map(key => ({...data[key], firebaseKey: key})) : [];
-        window.atualizarTabelas();
-    });
-
-    onValue(historicoRef, (snapshot) => {
-        const data = snapshot.val();
-        window.historico = data ? Object.values(data) : [];
-        window.atualizarTabelas();
-    });
-
-    // --- 4. FUNÇÕES DE INTERFACE ---
-    window.login = function(role) {
-        if(role === 'motorista') { 
-            window.currentUserRole = 'motorista'; 
-            window.iniciarSistema(); 
-        } else { 
-            const p = document.getElementById('admin-pass').value; 
-            if(p === 'admin123') { 
-                window.currentUserRole = 'admin'; 
-                window.iniciarSistema(); 
-            } else {
-                Swal.fire({icon:'error', title:'Senha Incorreta'});
-            }
-        }
-    };
-
-    window.mostrarInputAdmin = function() {
-        document.getElementById('admin-pass').style.display = 'block';
-        document.getElementById('admin-pass').focus();
-    };
-
-    window.checkAdminPass = function(e) {
-        if(e.key === 'Enter') window.login('admin');
-    };
-
-    window.iniciarSistema = function() {
-        document.getElementById('login-screen').style.display = 'none';
-        document.querySelector('.container').style.display = 'block';
-        if(window.currentUserRole === 'admin') document.body.classList.add('admin-mode');
-        document.getElementById('user-badge').innerText = window.currentUserRole === 'admin' ? 'ADMIN' : 'OPERADOR';
-        window.mudarAba('monitoramento');
-    };
-
-    window.logout = function() { location.reload(); };
-
-    window.mudarAba = function(aba) {
-        // Correção aqui: usando .tab-content para coincidir com seu HTML
-        document.querySelectorAll('.tab-content').forEach(a => a.style.display = 'none');
-        const target = document.getElementById(`aba-${aba}`);
-        if(target) target.style.display = 'block';
-        
-        // Atualiza estado dos botões da nav
-        document.querySelectorAll('.nav-item, .tab-btn').forEach(b => b.classList.remove('active'));
-    };
-
-    window.carregarSelect = function() {
-        if(!selectPlaca) return;
-        const valAnterior = selectPlaca.value;
-        selectPlaca.innerHTML = '<option value="">-- Toque para selecionar --</option>';
-        window.baseFrota.sort((a,b)=>a.placa.localeCompare(b.placa)).forEach(v => {
-            const opt = document.createElement('option');
-            opt.value = v.placa; opt.text = `${v.placa} - ${v.modelo}`;
-            selectPlaca.appendChild(opt);
-        });
-        selectPlaca.value = valAnterior;
-    };
-
-    window.preencherDados = function() {
-        const placa = selectPlaca.value;
-        if(!placa) return window.limparForm();
-        const v = window.baseFrota.find(x => x.placa === placa);
-        if(!v) return;
-        
-        const t = window.emTransito.find(x => x.placa === placa);
-        inputModelo.value = v.modelo;
-        inputCondutor.value = t ? t.condutor : (v.condutor || '');
-        inputKmSaida.value = t ? t.kmSaida : (v.kmAtual || '');
-        inputKmSaida.readOnly = !!t;
-        
-        let statusHTML = t ? '<span class="badge status-rua"><i class="fa-solid fa-road"></i> EM TRÂNSITO</span>' : 
-                             '<span class="badge status-disp" style="background:#dcfce7; color:#15803d"><i class="fa-solid fa-check"></i> DISPONÍVEL</span>';
-        document.getElementById('status-texto').innerHTML = statusHTML;
-    };
-
-    window.registrarSaida = function(tipo) {
-        if(!selectPlaca.value || !inputKmSaida.value) return Swal.fire('Erro', 'Selecione veículo e KM', 'error');
-        
-        const novaSaida = {
-            placa: selectPlaca.value,
-            modelo: inputModelo.value,
-            condutor: inputCondutor.value,
-            kmSaida: parseInt(inputKmSaida.value),
-            saida: new Date().toISOString(),
-            justificativa: inputJustificativa.value || '',
-            status: tipo
-        };
-
-        push(emTransitoRef, novaSaida).then(() => {
-            Swal.fire('Sucesso', 'Saída confirmada!', 'success');
-            window.limparForm();
-        });
-    };
-
-    window.registrarEntrada = function() {
-        const item = window.emTransito.find(x => x.placa === selectPlaca.value);
-        if(!item) return Swal.fire('Erro', 'Veículo não consta como em trânsito.', 'error');
-
-        Swal.fire({
-            title: 'Baixa de Veículo',
-            html: `Placa: ${item.placa}<br>KM Saída: ${item.kmSaida}<br>Digite a KM de Chegada:`,
-            input: 'number',
-            showCancelButton: true
-        }).then((res) => {
-            if(res.isConfirmed) {
-                const kmChegada = parseInt(res.value);
-                if(kmChegada < item.kmSaida) return Swal.fire('Erro', 'KM de chegada menor que a de saída!', 'error');
-
-                const historicoDados = {
-                    ...item,
-                    kmChegada,
-                    chegada: new Date().toISOString(),
-                    kmRodados: kmChegada - item.kmSaida
-                };
-                delete historicoDados.firebaseKey;
-
-                push(historicoRef, historicoDados).then(() => {
-                    remove(ref(db, `emTransito/${item.firebaseKey}`));
-                    
-                    // Atualiza KM na base frota
-                    const vIndex = window.baseFrota.findIndex(v => v.placa === item.placa);
-                    if(vIndex !== -1) {
-                        set(ref(db, `baseFrota/${vIndex}/kmAtual`), kmChegada);
-                    }
-
-                    Swal.fire('Sucesso', 'Veículo liberado!', 'success');
-                    window.limparForm();
-                });
-            }
-        });
-    };
-
-    window.atualizarTabelas = function() {
-        const tbody = document.querySelector('#tabela-transito tbody');
-        if(!tbody) return;
-        tbody.innerHTML = '';
-
-        window.emTransito.forEach(item => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td data-label="Placa">${item.placa}</td>
-                <td data-label="Condutor">${item.condutor}</td>
-                <td data-label="KM">${item.kmSaida}</td>
-                <td data-label="Status"><span class="badge status-rua">${item.status}</span></td>
-                <td data-label="Saída">${new Date(item.saida).toLocaleTimeString()}</td>
-                <td data-label="Tempo">-</td>
-                <td><button class="badge" style="background:var(--primary); color:white; border:none; cursor:pointer" onclick="window.selecionarVeiculo('${item.placa}')">Selecionar</button></td>
-            `;
-            tbody.appendChild(tr);
-        });
-
-        document.getElementById('count-rua').innerText = window.emTransito.length;
-        document.getElementById('count-garagem').innerText = window.baseFrota.length - window.emTransito.length;
-    };
-
-    window.selecionarVeiculo = function(placa) {
-        selectPlaca.value = placa;
-        window.preencherDados();
-        window.mudarAba('monitoramento');
-    };
-
-    window.limparForm = function() {
-        if(selectPlaca) selectPlaca.value = "";
-        inputModelo.value = "";
-        inputCondutor.value = "";
-        inputKmSaida.value = "";
-        inputJustificativa.value = "";
-        inputKmSaida.readOnly = false;
-        document.getElementById('status-texto').innerText = "Aguardando seleção...";
-    };
-
-    window.atualizarDashboard = function() {
-        // Implementar lógica de gráficos aqui se necessário
-        console.log("Dashboard atualizado");
-    };
-
-    // Inicialização do relógio
-    setInterval(() => {
-        const r = document.getElementById('relogio');
-        if(r) r.innerText = new Date().toLocaleTimeString();
-    }, 1000);
-    
+} catch (err) {
+    alert("ERRO CRÍTICO: " + err.message);
+}
 </script>
 </body>
 </html>
