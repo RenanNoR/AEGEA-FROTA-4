@@ -386,52 +386,62 @@ onValue(ref(db), (snapshot) => {
     const inputCondutor = document.getElementById('input-condutor');
     const inputKmSaida = document.getElementById('input-km-saida');
     const inputJustificativa = document.getElementById('input-justificativa');
+// --- COLOQUE AQUI (Substituindo as antigas) ---
 
-    function login(role) {
-        if(role === 'motorista') { currentUserRole = 'motorista'; iniciarSistema(); }
-        else { 
-            const p = document.getElementById('admin-pass').value; 
-            if(p === 'admin123') { currentUserRole = 'admin'; iniciarSistema(); } 
-            else Swal.fire({icon:'error', title:'Senha Incorreta', confirmButtonColor: 'var(--primary)'});
+window.login = function(role) {
+    if(role === 'motorista') { 
+        window.currentUserRole = 'motorista'; 
+        window.iniciarSistema(); 
+    } else { 
+        const p = document.getElementById('admin-pass').value; 
+        if(p === 'admin123') { 
+            window.currentUserRole = 'admin'; 
+            window.iniciarSistema(); 
+        } else {
+            Swal.fire({icon:'error', title:'Senha Incorreta', confirmButtonColor: 'var(--primary)'});
         }
     }
-    function mostrarInputAdmin() { document.getElementById('admin-pass').style.display = 'block'; document.getElementById('admin-pass').focus(); }
-    function checkAdminPass(e) { if(e.key==='Enter') login('admin'); }
-    function iniciarSistema() {
-        document.getElementById('login-screen').style.display = 'none';
-        document.querySelector('.container').style.display = 'block';
-        if(currentUserRole === 'admin') {
-            document.body.classList.add('admin-mode');
+}
+
+window.iniciarSistema = function() {
+    document.getElementById('login-screen').style.display = 'none';
+    document.querySelector('.container').style.display = 'block';
+    if(window.currentUserRole === 'admin') {
+        document.body.classList.add('admin-mode');
+    }
+    const badge = document.getElementById('user-badge');
+    if(badge) badge.innerText = window.currentUserRole === 'admin' ? 'ADMIN' : 'OPERADOR';
+    
+    window.mudarAba('monitoramento'); 
+    window.carregarSelect(); 
+    window.atualizarTabelas();
+}
+ 
+window.carregarSelect = function() {
+    if(!selectPlaca) return;
+    selectPlaca.innerHTML = '<option value="">-- Toque para selecionar --</option>';
+    // Usa o window.baseFrota que vem do Firebase (onValue)
+    const frota = window.baseFrota || [];
+    frota.sort((a,b)=>a.placa.localeCompare(b.placa)).forEach(v => {
+        const opt = document.createElement('option');
+        opt.value = v.placa; opt.text = `${v.placa} - ${v.modelo}`;
+        selectPlaca.appendChild(opt);
+    });
+}
+
+window.preencherDados = function() {
+    const placa = selectPlaca.value;
+    const veiculo = window.baseFrota.find(v => v.placa === placa);
+    if(veiculo) {
+        inputModelo.value = veiculo.modelo;
+        inputKmSaida.value = veiculo.kmAtual || "";
+        // Se o veículo estiver em trânsito, você pode avisar aqui
+        const emViagem = window.emTransito.find(t => t.placa === placa);
+        if(emViagem) {
+            Swal.fire('Atenção', 'Este veículo já possui uma saída aberta!', 'warning');
         }
-        document.getElementById('user-badge').innerText = currentUserRole === 'admin' ? 'ADMIN' : 'OPERADOR';
-        mudarAba('monitoramento'); carregarSelect(); atualizarTabelas(); atualizarDashboard();
     }
-    function logout() { location.reload(); }
-    window.onload = function() { if(!localStorage.getItem('frota_base_v3')) salvarBaseFrota(); setInterval(atualizarRelogio, 1000); }
-
-    function carregarSelect() {
-        selectPlaca.innerHTML = '<option value="">-- Toque para selecionar --</option>';
-        baseFrota.sort((a,b)=>a.placa.localeCompare(b.placa)).forEach(v => {
-            const opt = document.createElement('option');
-            opt.value = v.placa; opt.text = `${v.placa} - ${v.modelo}`;
-            selectPlaca.appendChild(opt);
-        });
-    }
-
-    window.preencherDados = function() {
-        const placa = selectPlaca.value;
-        if(!placa) return limparForm();
-        const v = baseFrota.find(x => x.placa === placa);
-        if(!v) return;
-        inputModelo.value = v.modelo;
-        const t = emTransito.find(x => x.placa === placa);
-        const m = emManutencao.find(x => x.placa === placa);
-        inputCondutor.value = t ? t.condutor : v.condutor;
-        inputJustificativa.value = t ? t.justificativa : '';
-        inputKmSaida.value = t ? t.kmSaida : (v.kmAtual || '');
-        inputKmSaida.readOnly = !!t; 
-        let statusHTML = '<span class="badge status-disp" style="background:#dcfce7; color:#15803d"><i class="fa-solid fa-check"></i> DISPONÍVEL</span>';
-        let boxColor = '#f0fdf4';
+}
         
         // Alerta de Revisão no Status Box
         if(v.kmRevisao && v.kmAtual) {
