@@ -416,6 +416,21 @@ window.iniciarSistema = function() {
     window.carregarSelect(); 
     window.atualizarTabelas();
 }
+    window.mostrarInputAdmin = function() {
+    const campo = document.getElementById('admin-pass');
+    if (campo) {
+        campo.style.display = 'block';
+        campo.focus();
+    } else {
+        // Se o seu ID for diferente, o console vai te avisar aqui
+        console.error("ID 'admin-pass' não encontrado no HTML");
+    }
+};
+
+// Adicione também esta para o "Enter" funcionar
+window.checkAdminPass = function(e) {
+    if (e.key === 'Enter') window.login('admin');
+};
  
 window.carregarSelect = function() {
     if(!selectPlaca) return;
@@ -444,12 +459,13 @@ window.preencherDados = function() {
 }
         
         // Alerta de Revisão no Status Box
-        if(v.kmRevisao && v.kmAtual) {
-            const kmRestante = v.kmRevisao - v.kmAtual;
-            if(kmRestante <= 1000 && kmRestante > 0) statusHTML += '<br><span style="color:var(--warning); font-weight:bold; font-size:0.8rem;">⚠️ REVISÃO PRÓXIMA</span>';
-            else if(kmRestante <= 0) statusHTML += '<br><span style="color:var(--danger); font-weight:bold; font-size:0.8rem;">☠️ REVISÃO VENCIDA</span>';
-        }
-
+       // Alerta de Revisão no Status Box
+    // Substitua o 'if(v.kmRevisao...' por este:
+    if(veiculo && veiculo.kmRevisao && veiculo.kmAtual) {
+        const kmRestante = veiculo.kmRevisao - veiculo.kmAtual;
+        if(kmRestante <= 1000 && kmRestante > 0) statusHTML += '<br><span style="color:var(--warning); font-weight:bold; font-size:0.8rem;">⚠️ REVISÃO PRÓXIMA</span>';
+        else if(kmRestante <= 0) statusHTML += '<br><span style="color:var(--danger); font-weight:bold; font-size:0.8rem;">☠️ REVISÃO VENCIDA</span>';
+    }
         if(t) { statusHTML = `<span class="badge status-rua" style="background:#fef3c7; color:#b45309"><i class="fa-solid fa-road"></i> EM TRÂNSITO</span><br><small>Desde: ${formatarHora(t.saida)}</small>`; boxColor = '#fffbeb'; } 
         else if (m) { statusHTML = `<span class="badge status-manut" style="background:#f1f5f9; color:#475569"><i class="fa-solid fa-wrench"></i> ${m.categoria || 'MANUTENÇÃO'}</span>`; boxColor = '#f1f5f9'; }
         
