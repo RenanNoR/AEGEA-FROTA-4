@@ -140,24 +140,24 @@
         </div>
         <div style="text-align: right;">
             <h2 id="relogio" style="font-family: monospace; font-weight: 700; color: var(--primary); margin:0;">00:00</h2>
-            <button onclick="logout()" style="margin-left: 15px; background: var(--danger); color: white; border:none; padding: 8px 12px; border-radius: 10px; cursor: pointer;"><i class="fa-solid fa-right-from-bracket"></i></button>
+            <button onclick="window.logout()" style="margin-left: 15px; background: var(--danger); color: white; border:none; padding: 8px 12px; border-radius: 10px; cursor: pointer;"><i class="fa-solid fa-right-from-bracket"></i></button>
         </div>
     </header>
 
     <div class="tabs">
         <button class="tab-btn active" onclick="mudarAba('monitoramento')"><i class="fa-solid fa-map-location-dot"></i> Monitoramento</button>
-        <button class="tab-btn admin-only" onclick="mudarAba('dashboard')"><i class="fa-solid fa-chart-pie"></i> Dashboard Pro</button>
-        <button class="tab-btn admin-only" onclick="mudarAba('manutencao')"><i class="fa-solid fa-wrench"></i> Manutenção</button>
-        <button class="tab-btn admin-only" onclick="mudarAba('historico')"><i class="fa-solid fa-clock-rotate-left"></i> Histórico</button>
-        <button class="tab-btn admin-only" onclick="mudarAba('gestao')"><i class="fa-solid fa-gear"></i> Gestão</button>
+        <button class="tab-btn admin-only" onclick="window.mudarAba('dashboard')"><i class="fa-solid fa-chart-pie"></i> Dashboard Pro</button>
+        <button class="tab-btn admin-only" onclick="window.mudarAba('manutencao')"><i class="fa-solid fa-wrench"></i> Manutenção</button>
+        <button class="tab-btn admin-only" onclick="window.mudarAba('historico')"><i class="fa-solid fa-clock-rotate-left"></i> Histórico</button>
+        <button class="tab-btn admin-only" onclick="window.mudarAba('gestao')"><i class="fa-solid fa-gear"></i> Gestão</button>
     </div>
 
     <nav class="bottom-nav">
         <button class="nav-item active" onclick="mudarAba('monitoramento')"><i class="fa-solid fa-map-location-dot"></i><span>Monitor</span></button>
-        <button class="nav-item admin-only" onclick="mudarAba('dashboard')"><i class="fa-solid fa-chart-pie"></i><span>Dash</span></button>
-        <button class="nav-item admin-only" onclick="mudarAba('manutencao')"><i class="fa-solid fa-wrench"></i><span>Manut</span></button>
-        <button class="nav-item admin-only" onclick="mudarAba('historico')"><i class="fa-solid fa-clock-rotate-left"></i><span>Hist</span></button>
-        <button class="nav-item admin-only" onclick="mudarAba('gestao')"><i class="fa-solid fa-gear"></i><span>Gestão</span></button>
+        <button class="nav-item admin-only" onclick="window.mudarAba('dashboard')"><i class="fa-solid fa-chart-pie"></i><span>Dash</span></button>
+        <button class="nav-item admin-only" onclick="window.mudarAba('manutencao')"><i class="fa-solid fa-wrench"></i><span>Manut</span></button>
+        <button class="nav-item admin-only" onclick="window.mudarAba('historico')"><i class="fa-solid fa-clock-rotate-left"></i><span>Hist</span></button>
+        <button class="nav-item admin-only" onclick="window.mudarAba('gestao')"><i class="fa-solid fa-gear"></i><span>Gestão</span></button>
     </nav>
 
     <div id="aba-monitoramento" class="tab-content show">
@@ -363,6 +363,18 @@ const db = getDatabase(app);
 const baseFrotaRef = ref(db, 'baseFrota');
 const emTransitoRef = ref(db, 'emTransito');
 const historicoRef = ref(db, 'historico');
+
+    
+        window.mudarAba = function(n) {
+        document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('show')); document.getElementById('aba-'+n).classList.add('show');
+        document.querySelectorAll('.tab-btn, .nav-item').forEach(x=>x.classList.remove('active'));
+        document.querySelectorAll(`[onclick="mudarAba('${n}')"]`).forEach(x=>x.classList.add('active'));
+        if(n === 'dashboard' && window.currentUserRole === 'admin') atualizarDashboard();
+        if(n === 'manutencao' && window.currentUserRole === 'admin') renderizarTabelaManutencao(); 
+        if(n === 'gestao' && window.currentUserRole === 'admin') limparFormGestao();
+        if(n === 'historico' && window.currentUserRole === 'admin') filtrarHistorico();
+        atualizarTabelas();
+    }
 
 // --- 2. OUVINTE TEMPO REAL ---
 // Este bloco substitui o localStorage e atualiza o site sozinho
@@ -1037,15 +1049,15 @@ window.preencherDados = function() {
     window.deletarVeiculo = function(p) { Swal.fire({title:`Deletar ${p}?`, showCancelButton:true, confirmButtonColor:'var(--danger)'}).then(r=>{ if(r.isConfirmed){ baseFrota=baseFrota.filter(x=>x.placa!==p); salvarTudo(); }}); }
     
     // FUNÇÃO PRINCIPAL DE SALVAR
-    function salvarTudo() {
-        localStorage.setItem('frota_base_v3', JSON.stringify(baseFrota));
-        localStorage.setItem('frota_em_transito_v3', JSON.stringify(emTransito));
-        localStorage.setItem('frota_manutencao_v3', JSON.stringify(emManutencao));
-        localStorage.setItem('frota_historico_v3', JSON.stringify(historico));
-        localStorage.setItem('frota_historico_manutencao_v3', JSON.stringify(historicoManutencao)); 
-        salvarCategorias(); 
-        atualizarTabelas();
-    }
+   // function salvarTudo() {
+       // localStorage.setItem('frota_base_v3', JSON.stringify(baseFrota));
+       // localStorage.setItem('frota_em_transito_v3', JSON.stringify(emTransito));
+       // localStorage.setItem('frota_manutencao_v3', JSON.stringify(emManutencao));
+       // localStorage.setItem('frota_historico_v3', JSON.stringify(historico));
+       // localStorage.setItem('frota_historico_manutencao_v3', JSON.stringify(historicoManutencao)); 
+       // salvarCategorias(); 
+       // atualizarTabelas();
+   // }
     
     function atualizarRelogio() { document.getElementById('relogio').innerText = new Date().toLocaleTimeString(); }
     function formatarHora(ts) { return new Date(ts).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}); }
@@ -1053,16 +1065,7 @@ window.preencherDados = function() {
     function calcularTempoParado(ms) { const d=Math.floor(ms/86400000); const h=Math.floor((ms%86400000)/3600000); const m=Math.round((ms%3600000)/60000); if(d>0) return `${d}d ${h}h`; return `${h}h ${m}m`; }
     function filtrarTabela(id, txt) { document.querySelectorAll(`#${id} tbody tr`).forEach(r => r.style.display = r.innerText.toUpperCase().includes(txt.toUpperCase()) ? '' : 'none'); }
     
-    window.mudarAba = function(n) {
-        document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('show')); document.getElementById('aba-'+n).classList.add('show');
-        document.querySelectorAll('.tab-btn, .nav-item').forEach(x=>x.classList.remove('active'));
-        document.querySelectorAll(`[onclick="mudarAba('${n}')"]`).forEach(x=>x.classList.add('active'));
-        if(n === 'dashboard' && currentUserRole === 'admin') atualizarDashboard();
-        if(n === 'manutencao' && currentUserRole === 'admin') renderizarTabelaManutencao(); 
-        if(n === 'gestao' && currentUserRole === 'admin') limparFormGestao();
-        if(n === 'historico' && currentUserRole === 'admin') filtrarHistorico();
-        atualizarTabelas();
-    }
+
     
     window.baixaRapida = function(p) { selectPlaca.value=p; preencherDados(); registrarEntrada(); }
 
