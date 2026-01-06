@@ -484,76 +484,64 @@ window.carregarSelect = function() {
     }
 };
 
-
-    window.registrarSaida = function() {
-    // Validação básica (ajuste os IDs se forem diferentes no seu HTML)
-    if(!selectPlaca.value || !inputKmSaida.value || !inputCondutor.value) {
-        return Swal.fire('Erro', 'Preencha Placa, Condutor e KM!', 'error');
-    }
-    
-    const novaSaida = {
-        placa: selectPlaca.value,
-        modelo: inputModelo.value,
-        condutor: inputCondutor.value,
-        kmSaida: parseInt(inputKmSaida.value),
-        saida: new Date().toISOString(),
-        status: 'em_trânsito'
-    };
-
-    // 'emTransitoRef' é a referência que definimos na inicialização
-    push(emTransitoRef, novaSaida).then(() => {
-        Swal.fire('Sucesso', 'Veículo em trânsito (Nuvem)', 'success');
-        if(typeof window.limparForm === "function") window.limparForm();
-    }).catch(error => {
-        Swal.fire('Erro', 'Falha ao salvar na nuvem: ' + error.message, 'error');
-    });
-};
 window.registrarEntrada = function() {
     const placa = document.getElementById('select-placa').value;
-    // Procura o veículo na lista de "Em Trânsito" da nuvem
+    if (!placa) return Swal.fire('Erro', 'Selecione uma placa primeiro.', 'error');
+
     const item = window.emTransito.find(x => x.placa === placa);
-    
     if(!item) return Swal.fire('Erro', 'Este veículo não está em trânsito no banco de dados.', 'error');
 
     Swal.fire({
         title: 'KM de Chegada',
         input: 'number',
         inputLabel: `KM de Saída: ${item.kmSaida}`,
-        showCancelButton: true
+        showCancelButton: true,
+        confirmButtonText: 'Dar Baixa',
+        cancelButtonText: 'Cancelar'
     }).then((res) => {
         if(res.isConfirmed && res.value) {
             const kmChegada = parseInt(res.value);
             
-            // Cria o objeto do histórico
+            // 1. Criar o objeto de histórico
             const dadosFinal = {
-                ...item,
+                placa: item.placa,
+                modelo: item.modelo || "Não informado",
+                condutor: item.condutor || "Não informado",
+                kmSaida: item.kmSaida,
                 kmChegada: kmChegada,
-                chegada: new Date().toISOString(),
-                kmRodados: kmChegada - item.kmSaida
+                kmRodados: kmChegada - item.kmSaida,
+                saida: item.saida,
+                chegada: new Date().toISOString()
             };
 
             const chaveParaDeletar = item.firebaseKey;
-            delete dadosFinal.firebaseKey; // Limpa a chave antes de salvar no histórico
 
-            // 1. Salva no Histórico da Nuvem
+            // 2. PRIMEIRO: Salva no Histórico
             push(ref(db, 'historico'), dadosFinal).then(() => {
-                // 2. Remove do Trânsito na Nuvem
-                remove(ref(db, `emTransito/${chaveParaDeletar}`));
                 
-                // 3. Atualiza o KM na Base da Frota (Nuvem)
-               // 3.1. Atualiza o KM na Base da Frota (Nuvem) de forma correta
-// Em vez de usar indexNaBase (que gera o erro de duplicar/undefined), buscamos o ID real
-const veiculoFirebase = Object.entries(window.rawBaseFrotaData || {}).find(([key, val]) => val.placa === placa);
-if (veiculoFirebase) {
-    // Atualiza apenas o campo kmAtual dentro do ID correto na nuvem
-    set(ref(db, `baseFrota/${veiculoFirebase[0]}/kmAtual`), kmChegada);
-}
+                // 3. SEGUNDO: Atualiza o KM na Base da Frota
+                // Usando a lógica de busca por chave que evita o "undefined"
+                const veiculoFirebase = Object.entries(window.rawBaseFrotaData || {}).find(([key, val]) => val.placa === placa);
+                
+                if (veiculoFirebase) {
+                    // Atualiza o KM real no Firebase
+                    set(ref(db, `baseFrota/${veiculoFirebase[0]}/kmAtual`), kmChegada);
+                }
 
-                Swal.fire('Sucesso', 'Baixa realizada e sincronizada!', 'success');
+                // 4. TERCEIRO: Só agora remove do Trânsito
+                remove(ref(db, `emTransito/${chaveParaDeletar}`));
+
+                Swal.fire('Sucesso', 'Baixa realizada com sucesso!', 'success');
+                if(window.limparForm) window.limparForm();
+                
+            }).catch(error => {
+                console.error("Erro na baixa:", error);
+                Swal.fire('Erro Crítico', 'Não foi possível salvar o histórico: ' + error.message, 'error');
             });
         }
     });
 };
+ 
   
 
     function limparForm() {
