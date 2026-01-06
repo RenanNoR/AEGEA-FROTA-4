@@ -429,12 +429,17 @@ const baseFrotaRef = ref(db, 'baseFrota');
 const emTransitoRef = ref(db, 'emTransito');
 const historicoRef = ref(db, 'historico');
 
-    // --- FUNÇÕES DE UTILIDADE (COLE NO TOPO DO SCRIPT) ---
+// --- FUNÇÕES DE UTILIDADE PARA TEMPO E DATA ---
 
 window.formatarHora = function(dataISO) {
     if (!dataISO) return "--:--";
-    const d = new Date(dataISO);
-    return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    try {
+        const d = new Date(dataISO);
+        // Retorna apenas Hora:Minuto
+        return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    } catch (e) {
+        return "--:--";
+    }
 };
 
 window.calcularTempo = function(ms) {
