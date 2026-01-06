@@ -325,7 +325,7 @@
             <div class="search-bar" style="width:100%"><i class="fa-solid fa-filter"></i><input type="text" id="filtro-hist-texto" placeholder="Filtrar..." onkeyup="filtrarHistorico()"></div>
             <input type="date" id="filtro-data-inicio" onchange="filtrarHistorico()">
             <input type="date" id="filtro-data-fim" onchange="filtrarHistorico()">
-            <button class="btn-action" style="background: var(--success); padding: 10px 20px; font-size: 0.8rem;" onclick="exportarExcel()"><i class="fa-solid fa-file-csv"></i></button>
+            <button class="btn-action" style="background: var(--success); padding: 10px 20px; font-size: 0.8rem;" onclick="window.exportarExcel()"><i class="fa-solid fa-file-csv"></i></button>
         </div>
         <div class="table-wrapper">
             <table id="tabela-historico">
@@ -1407,30 +1407,40 @@ window.renderizarTabelaGestao = function() {
         }; 
         r.readAsText(i.files[0]); 
     }
-   window.exportarExcel = function() {
-        // O caractere \ufeff ajuda o Excel a reconhecer o arquivo como UTF-8
-        let csvContent = "\ufeffsep=;\n"; 
-        csvContent += "Data;Placa;Condutor;KM Rodados;Tempo Viagem;Obs\n";
+window.exportarExcel = function() {
+    // Busca os dados da variável global de histórico
+    const dados = window.historicoManutencao || [];
 
-        // Percorre o histórico real do seu sistema
-        historico.forEach(item => {
-            const linha = `${item.data};${item.placa};${item.condutor};${item.km};${item.tempo};${item.obs}\n`;
-            csvContent += linha;
-        });
+    if (dados.length === 0) {
+        Swal.fire('Aviso', 'Não há dados no histórico para exportar.', 'warning');
+        return;
+    }
 
-        // Especifica o tipo com charset utf-8
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "Historico_Frota.csv";
-        document.body.appendChild(a); // Adiciona ao corpo para garantir funcionamento em todos browsers
-        a.click();
-        document.body.removeChild(a);
-        
-        URL.revokeObjectURL(url);
-    };
+    // MAPEAMENTO: Transforma os dados do Firebase para colunas do Excel
+    const rows = dados.map(i => ({
+        "Data": i.data || i.saida || "---",
+        "Placa": i.placa || "---",
+        "Condutor": i.condutor || "---",
+        "KM Saída": i.kmSaida || 0,
+        "KM Retorno": i.kmFinal || i.kmRetorno || "---",
+        "KM Rodados": (i.kmFinal && i.kmSaida) ? (parseInt(i.kmFinal) - parseInt(i.kmSaida)) : "---",
+        "Status": i.status || "Finalizado",
+        "Observação": i.justificativa || i.obs || ""
+    }));
+
+    try {
+        // Criação da planilha usando a biblioteca XLSX
+        const worksheet = XLSX.utils.json_to_sheet(rows);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Historico_Frota");
+
+        // Gera e baixa o arquivo
+        XLSX.writeFile(workbook, `Relatorio_Frota_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
+    } catch (error) {
+        console.error("Erro ao gerar Excel:", error);
+        alert("Erro ao gerar o arquivo Excel. Verifique se a biblioteca XLSX está carregada.");
+    }
+};
     // NO FINAL DO ARQUIVO:
 // --- FUNÇÃO DE LOGOUT CORRIGIDA ---
 window.fazerLogout = function() {
