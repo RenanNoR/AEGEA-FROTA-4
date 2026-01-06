@@ -180,8 +180,8 @@
             <div style="display: flex; flex-direction: column; justify-content: center;">
                 <div id="status-box" style="text-align: center; margin-bottom: 20px; padding: 30px; border-radius: 20px; background: #f8fafc; border: 2px dashed var(--border);"><span style="color: var(--text-sec); font-size: 0.8rem; text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">Status Atual</span><br><strong id="status-texto" style="font-size: 1.4rem; color: var(--primary);">Aguardando...</strong></div>
                 <div class="actions">
-                    <button class="btn-action btn-saida" onclick="registrarSaida('RUA')"><i class="fa-solid fa-road"></i> SAÍDA</button>
-                    <button class="btn-action btn-saida" style="background: linear-gradient(135deg, var(--info), #2563eb);" onclick="registrarSaida('OUTROS')"><i class="fa-solid fa-share"></i> OUTROS</button>
+                    <button class="btn-action btn-saida" onclick="window.registrarSaida('RUA')"><i class="fa-solid fa-road"></i> SAÍDA</button>
+                    <button class="btn-action btn-saida" style="background: linear-gradient(135deg, var(--info), #2563eb);" onclick="window.registrarSaida('OUTROS')"><i class="fa-solid fa-share"></i> OUTROS</button>
                     <button class="btn-action btn-entrada" onclick="registrarEntrada()"><i class="fa-solid fa-check"></i> BAIXAR</button>
                     <button class="btn-action btn-manutencao admin-only" onclick="enviarParaManutencao()"><i class="fa-solid fa-screwdriver-wrench"></i> MANUT.</button>
                 </div>
@@ -369,6 +369,33 @@ const baseFrotaRef = ref(db, 'baseFrota');
 const emTransitoRef = ref(db, 'emTransito');
 const historicoRef = ref(db, 'historico');
 
+
+    // --- FUNÇÕES DE RENDERIZAÇÃO ---
+window.renderizarTabelaManutencao = function() {
+    const tb = document.querySelector('#tabela-manutencao tbody');
+    if (!tb) return;
+    tb.innerHTML = '';
+    
+    // Filtra veículos com revisão próxima (ex: 500km de diferença) usando window.baseFrota
+    const emManutencao = (window.baseFrota || []).filter(v => v.kmRevisao && (v.kmRevisao - v.kmAtual <= 500));
+
+    if (emManutencao.length === 0) {
+        tb.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">Nenhuma manutenção pendente.</td></tr>';
+        return;
+    }
+
+    emManutencao.forEach(v => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${v.placa}</td>
+            <td>${v.modelo}</td>
+            <td>${v.kmAtual} / ${v.kmRevisao}</td>
+            <td><span class="badge status-rua">REVISÃO PRÓXIMA</span></td>
+        `;
+        tb.appendChild(tr);
+    });
+};
+
     
         window.mudarAba = function(n) {
         document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('show')); document.getElementById('aba-'+n).classList.add('show');
@@ -517,14 +544,15 @@ window.carregarSelect = function() {
 window.registrarSaida = function() {
     const placa = document.getElementById('select-placa').value;
     const condutor = document.getElementById('input-condutor').value.trim();
-    // KM atual deve vir do display preenchido pela função window.preencherDados
-    const kmSaida = parseInt(document.getElementById('display-km').innerText) || 0;
+    
+    // CORREÇÃO: Verifica se o elemento existe antes de tentar ler o innerText
+    const elKm = document.getElementById('display-km');
+    const kmSaida = elKm ? parseInt(elKm.innerText) || 0 : 0;
 
     if (!placa || !condutor) {
         return Swal.fire('Erro', 'Selecione um veículo e informe o condutor.', 'error');
     }
 
-    // Busca dados extras do veículo na base global para levar ao trânsito
     const veiculo = (window.baseFrota || []).find(v => v.placa === placa);
 
     const dadosSaida = {
@@ -536,16 +564,15 @@ window.registrarSaida = function() {
         status: 'RUA'
     };
 
-    // Envia para o Firebase
+    // Use push(ref(db, 'emTransito'), dadosSaida) conforme configurado no seu topo
     push(ref(db, 'emTransito'), dadosSaida).then(() => {
         Swal.fire('Sucesso', 'Saída registrada!', 'success');
         document.getElementById('input-condutor').value = '';
-        // A tabela vai atualizar sozinha pelo onValue
+        // A atualização da tabela ocorrerá via onValue automaticamente
     }).catch(err => {
         Swal.fire('Erro', 'Falha ao salvar: ' + err.message, 'error');
     });
 };
-
     
 window.registrarEntrada = function() {
     const placa = document.getElementById('select-placa').value;
