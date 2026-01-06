@@ -533,15 +533,15 @@ window.carregarSelect = function() {
     const select = document.getElementById('select-placa');
     if (!select) return;
 
-    // Garante que baseFrota existe e remove itens inválidos antes de ordenar
-    const frotaValida = (window.baseFrota || []).filter(v => v && v.placa);
+    // Filtra apenas veículos que possuem placa para não dar erro no sort
+    const frotaLimpa = (window.baseFrota || []).filter(v => v && v.placa);
 
-    // ORDENAÇÃO SEGURA: Verifica se a placa existe antes de comparar
-    frotaValida.sort((a, b) => (a.placa || "").localeCompare(b.placa || ""));
+    // Ordenação com trava de segurança para evitar o erro de 'localeCompare'
+    frotaLimpa.sort((a, b) => a.placa.localeCompare(b.placa));
 
-    select.innerHTML = '<option value="">Selecione o Veículo...</option>';
+    select.innerHTML = '<option value="">-- Toque para selecionar --</option>';
     
-    frotaValida.forEach(v => {
+    frotaLimpa.forEach(v => {
         const option = document.createElement('option');
         option.value = v.placa;
         option.textContent = `${v.placa} - ${v.modelo}`;
