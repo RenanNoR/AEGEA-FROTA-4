@@ -622,45 +622,58 @@ window.carregarSelect = function() {
 };
 window.preencherDados = function() {
     const placa = document.getElementById('select-placa').value;
-    // Busca o veículo na base global carregada do Firebase
-    const veiculo = (window.baseFrota || []).find(v => v.placa === placa);
+    if (!placa) return resetaCampos();
 
-    if (veiculo) {
-        // Preenche os campos de input
-        document.getElementById('input-modelo').value = veiculo.modelo || "";
-        document.getElementById('input-km-saida').value = veiculo.kmAtual || 0;
+    // 1. Verifica se o veículo já está na rua
+    const veiculoNaRua = (window.emTransito || []).find(v => v.placa === placa);
+    
+    // 2. Busca os dados técnicos do veículo na frota
+    const veiculoBase = (window.baseFrota || []).find(v => v.placa === placa);
 
-        // --- LÓGICA DO STATUS DE REVISÃO ---
+    const statusTexto = document.getElementById('status-texto');
+    const inputModelo = document.getElementById('input-modelo');
+    const inputKm = document.getElementById('input-km-saida');
+
+    // Preenche modelo e KM (Prioriza o KM da base ou do transito se houver)
+    if (veiculoBase) {
+        inputModelo.value = veiculoBase.modelo || "";
+        inputKm.value = veiculoBase.kmAtual || 0;
+    }
+
+    // --- LÓGICA DE EXIBIÇÃO DO STATUS ---
+    if (veiculoNaRua) {
+        // CASO 1: ESTÁ NA RUA (Igual sua imagem image_7bb540.png)
+        const horaSaida = window.formatarHora(veiculoNaRua.saida);
+        statusTexto.innerHTML = `
+            <div style="background:#fef3c7; padding:10px; border-radius:15px;">
+                <span style="color:#b45309; font-weight:bold;">⚠️ EM TRÂNSITO</span><br>
+                <small style="color:#b45309;">Desde: ${horaSaida}</small>
+            </div>`;
+    } else if (veiculoBase) {
+        // CASO 2: DISPONÍVEL OU REVISÃO
         let statusHTML = '✅ VEÍCULO DISPONÍVEL';
-        let statusColor = '#2563eb'; // Azul padrão
+        let statusColor = '#2563eb';
 
-        if (veiculo.kmRevisao && veiculo.kmAtual) {
-            const kmRestante = parseInt(veiculo.kmRevisao) - parseInt(veiculo.kmAtual);
-            
+        if (veiculoBase.kmRevisao && veiculoBase.kmAtual) {
+            const kmRestante = parseInt(veiculoBase.kmRevisao) - parseInt(veiculoBase.kmAtual);
             if (kmRestante <= 0) {
                 statusHTML = '💀 REVISÃO VENCIDA';
-                statusColor = '#dc2626'; // Vermelho
+                statusColor = '#dc2626';
             } else if (kmRestante <= 1000) {
                 statusHTML = '⚠️ REVISÃO PRÓXIMA';
-                statusColor = '#f59e0b'; // Amarelo/Laranja
+                statusColor = '#f59e0b';
             }
         }
-
-        // Atualiza a interface (Box de Status)
-        const statusTexto = document.getElementById('status-texto');
-        if (statusTexto) {
-            statusTexto.innerHTML = statusHTML;
-            statusTexto.style.color = statusColor;
-        }
-    } else {
-        // Reseta se não houver veículo selecionado
-        document.getElementById('input-modelo').value = '';
-        document.getElementById('input-km-saida').value = '';
-        if (document.getElementById('status-texto')) {
-            document.getElementById('status-texto').innerHTML = 'Aguardando...';
-        }
+        statusTexto.innerHTML = `<span style="color:${statusColor}; font-weight:bold;">${statusHTML}</span>`;
     }
 };
+
+// Função auxiliar para limpar tudo caso nada seja selecionado
+function resetaCampos() {
+    document.getElementById('input-modelo').value = '';
+    document.getElementById('input-km-saida').value = '';
+    document.getElementById('status-texto').innerHTML = 'Aguardando...';
+}
 window.registrarSaida = function() {
     const placa = document.getElementById('select-placa').value;
     const condutor = document.getElementById('input-condutor').value.trim();
