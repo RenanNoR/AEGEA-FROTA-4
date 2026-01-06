@@ -545,30 +545,44 @@ window.registrarSaida = function() {
     const placa = document.getElementById('select-placa').value;
     const condutor = document.getElementById('input-condutor').value.trim();
     
-    // CORREÇÃO: Verifica se o elemento existe antes de tentar ler o innerText
-    const elKm = document.getElementById('display-km');
-    const kmSaida = elKm ? parseInt(elKm.innerText) || 0 : 0;
+    // 1. TRAVA DE SEGURANÇA: Verifica se o veículo já está em trânsito
+    const jaEstaNaRua = (window.emTransito || []).some(v => v.placa === placa);
+
+    if (jaEstaNaRua) {
+        return Swal.fire({
+            icon: 'warning',
+            title: 'Veículo em Trânsito',
+            text: `A placa ${placa} já possui uma saída ativa. É necessário dar entrada (baixa) antes de registrar uma nova saída.`,
+            confirmButtonColor: '#3085d6'
+        });
+    }
 
     if (!placa || !condutor) {
         return Swal.fire('Erro', 'Selecione um veículo e informe o condutor.', 'error');
     }
 
+    // Busca o KM direto da fonte global (window.baseFrota)
     const veiculo = (window.baseFrota || []).find(v => v.placa === placa);
+    const kmParaSaida = veiculo ? parseInt(veiculo.kmAtual) : 0;
 
     const dadosSaida = {
         placa: placa,
         modelo: veiculo ? veiculo.modelo : "Não informado",
         condutor: condutor,
-        kmSaida: kmSaida,
+        kmSaida: kmParaSaida,
         saida: new Date().toISOString(),
         status: 'RUA'
     };
 
-    // Use push(ref(db, 'emTransito'), dadosSaida) conforme configurado no seu topo
+    // 2. ENVIO PARA O FIREBASE
     push(ref(db, 'emTransito'), dadosSaida).then(() => {
-        Swal.fire('Sucesso', 'Saída registrada!', 'success');
+        Swal.fire('Sucesso', `Saída registrada para ${placa}.`, 'success');
+        
+        // Limpa os campos após o sucesso
         document.getElementById('input-condutor').value = '';
-        // A atualização da tabela ocorrerá via onValue automaticamente
+        document.getElementById('display-modelo').innerText = '-';
+        document.getElementById('display-km').innerText = '-';
+        document.getElementById('select-placa').value = '';
     }).catch(err => {
         Swal.fire('Erro', 'Falha ao salvar: ' + err.message, 'error');
     });
