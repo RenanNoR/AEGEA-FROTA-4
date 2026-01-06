@@ -530,16 +530,24 @@ window.checkAdminPass = function(e) {
 };
  
 window.carregarSelect = function() {
-    if(!selectPlaca) return;
-    selectPlaca.innerHTML = '<option value="">-- Toque para selecionar --</option>';
-    // Usa o window.baseFrota que vem do Firebase (onValue)
-    const frota = window.baseFrota || [];
-    frota.sort((a,b)=>a.placa.localeCompare(b.placa)).forEach(v => {
-        const opt = document.createElement('option');
-        opt.value = v.placa; opt.text = `${v.placa} - ${v.modelo}`;
-        selectPlaca.appendChild(opt);
+    const select = document.getElementById('select-placa');
+    if (!select) return;
+
+    // Garante que baseFrota existe e remove itens inválidos antes de ordenar
+    const frotaValida = (window.baseFrota || []).filter(v => v && v.placa);
+
+    // ORDENAÇÃO SEGURA: Verifica se a placa existe antes de comparar
+    frotaValida.sort((a, b) => (a.placa || "").localeCompare(b.placa || ""));
+
+    select.innerHTML = '<option value="">Selecione o Veículo...</option>';
+    
+    frotaValida.forEach(v => {
+        const option = document.createElement('option');
+        option.value = v.placa;
+        option.textContent = `${v.placa} - ${v.modelo}`;
+        select.appendChild(option);
     });
-}
+};
  window.preencherDados = function() {
     const placa = document.getElementById('select-placa').value;
     const veiculo = window.baseFrota.find(v => v.placa === placa);
