@@ -605,18 +605,19 @@ window.carregarSelect = function() {
     const select = document.getElementById('select-placa');
     if (!select) return;
 
-    // Filtra apenas veículos que possuem placa para não dar erro no sort
-    const frotaLimpa = (window.baseFrota || []).filter(v => v && v.placa);
-
-    // Ordenação com trava de segurança para evitar o erro de 'localeCompare'
-    frotaLimpa.sort((a, b) => a.placa.localeCompare(b.placa));
-
+    // Limpa o select e adiciona a opção inicial
     select.innerHTML = '<option value="">-- Toque para selecionar --</option>';
-    
-    frotaLimpa.forEach(v => {
+
+    // Filtra apenas veículos que possuem placa para evitar o erro de undefined
+    const frotaValida = (window.baseFrota || []).filter(v => v && v.placa);
+
+    // Ordena de forma segura
+    frotaValida.sort((a, b) => a.placa.localeCompare(b.placa));
+
+    frotaValida.forEach(v => {
         const option = document.createElement('option');
         option.value = v.placa;
-        option.textContent = `${v.placa} - ${v.modelo}`;
+        option.textContent = v.placa;
         select.appendChild(option);
     });
 };
@@ -1408,38 +1409,36 @@ window.renderizarTabelaGestao = function() {
         r.readAsText(i.files[0]); 
     }
 window.exportarExcel = function() {
-    // Busca os dados da variável global de histórico
+    // Tenta pegar dados do histórico ou da lista geral se o histórico estiver vazio
     const dados = window.historicoManutencao || [];
 
     if (dados.length === 0) {
-        Swal.fire('Aviso', 'Não há dados no histórico para exportar.', 'warning');
+        Swal.fire('Aviso', 'Não há dados carregados para exportar.', 'warning');
         return;
     }
 
-    // MAPEAMENTO: Transforma os dados do Firebase para colunas do Excel
-    const rows = dados.map(i => ({
-        "Data": i.data || i.saida || "---",
-        "Placa": i.placa || "---",
-        "Condutor": i.condutor || "---",
-        "KM Saída": i.kmSaida || 0,
-        "KM Retorno": i.kmFinal || i.kmRetorno || "---",
-        "KM Rodados": (i.kmFinal && i.kmSaida) ? (parseInt(i.kmFinal) - parseInt(i.kmSaida)) : "---",
-        "Status": i.status || "Finalizado",
-        "Observação": i.justificativa || i.obs || ""
-    }));
+    const rows = dados.map(i => {
+        // Cálculo de KM Rodados seguro
+        const kmS = parseInt(i.kmSaida) || 0;
+        const kmF = parseInt(i.kmFinal || i.kmRetorno) || 0;
+        const totalRodado = kmF > 0 ? (kmF - kmS) : 0;
 
-    try {
-        // Criação da planilha usando a biblioteca XLSX
-        const worksheet = XLSX.utils.json_to_sheet(rows);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Historico_Frota");
+        return {
+            "Data Saída": i.saida ? new Date(i.saida).toLocaleDateString() : "---",
+            "Hora Saída": window.formatarHora(i.saida),
+            "Placa": i.placa || "---",
+            "Condutor": i.condutor || "---",
+            "KM Saída": kmS,
+            "KM Retorno": kmF > 0 ? kmF : "Em trânsito",
+            "KM Rodados": totalRodado,
+            "Obs": i.justificativa || i.obs || "-"
+        };
+    });
 
-        // Gera e baixa o arquivo
-        XLSX.writeFile(workbook, `Relatorio_Frota_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
-    } catch (error) {
-        console.error("Erro ao gerar Excel:", error);
-        alert("Erro ao gerar o arquivo Excel. Verifique se a biblioteca XLSX está carregada.");
-    }
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Historico");
+    XLSX.writeFile(workbook, `Frota_Relatorio_${new Date().getTime()}.xlsx`);
 };
     // NO FINAL DO ARQUIVO:
 // --- FUNÇÃO DE LOGOUT CORRIGIDA ---
