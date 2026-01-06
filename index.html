@@ -184,7 +184,7 @@
         </div>
         <div style="text-align: right;">
             <h2 id="relogio" style="font-family: monospace; font-weight: 700; color: var(--primary); margin:0;">00:00</h2>
-            <button onclick="window.logout()" style="margin-left: 15px; background: var(--danger); color: white; border:none; padding: 8px 12px; border-radius: 10px; cursor: pointer;"><i class="fa-solid fa-right-from-bracket"></i></button>
+            <button onclick="window.fazerLogout()" style="margin-left: 15px; background: var(--danger); color: white; border:none; padding: 8px 12px; border-radius: 10px; cursor: pointer;"><i class="fa-solid fa-right-from-bracket"></i></button>
         </div>
     </header>
 
@@ -431,29 +431,31 @@ const historicoRef = ref(db, 'historico');
 
 // --- FUNÇÕES DE UTILIDADE PARA TEMPO E DATA ---
 
+// --- CORREÇÃO DO RELÓGIO E FORMATADORES ---
+window.atualizarRelogio = function() {
+    const agora = new Date();
+    const relogioElemento = document.getElementById('relogio'); // Verifique se o ID é este mesmo
+    if (relogioElemento) {
+        relogioElemento.textContent = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    }
+};
+
+// Inicia o relógio para rodar a cada segundo
+setInterval(window.atualizarRelogio, 1000);
+
 window.formatarHora = function(dataISO) {
     if (!dataISO) return "--:--";
-    try {
-        const d = new Date(dataISO);
-        // Retorna apenas Hora:Minuto
-        return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    } catch (e) {
-        return "--:--";
-    }
+    const d = new Date(dataISO);
+    return isNaN(d) ? "--:--" : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 };
 
 window.calcularTempo = function(ms) {
     if (!ms || ms < 0) return "0min";
-    const totalMinutos = Math.floor(ms / 60000);
-    const horas = Math.floor(totalMinutos / 60);
-    const minutos = totalMinutos % 60;
-    
-    if (horas > 0) {
-        return `${horas}h ${minutos}min`;
-    }
-    return `${minutos}min`;
+    const totalMin = Math.floor(ms / 60000);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    return h > 0 ? `${h}h ${m}m` : `${m}min`;
 };
-
 
     // --- FUNÇÕES DE RENDERIZAÇÃO ---
 window.renderizarTabelaManutencao = function() {
@@ -1397,13 +1399,16 @@ window.renderizarTabelaGestao = function() {
         URL.revokeObjectURL(url);
     };
     // NO FINAL DO ARQUIVO:
-window.logout = function() {
-    // Usamos o auth que inicializamos no passo anterior
+window.fazerLogout = function() {
+    const { getAuth, signOut } = window.FirebaseAuth; // Garante que pega a referência correta
+    const auth = getAuth();
+    
     signOut(auth).then(() => {
-        // Sucesso: a tela de login aparecerá sozinha pelo onAuthStateChanged
         console.log("Sessão encerrada");
+        // Força o recarregamento para garantir que volte à tela de login limpa
+        window.location.reload(); 
     }).catch((error) => {
-        console.error("Erro ao sair:", error);
+        alert("Erro ao sair: " + error.message);
     });
 };
 </script>
