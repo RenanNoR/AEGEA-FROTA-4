@@ -522,7 +522,7 @@ window.carregarSelect = function() {
  window.preencherDados = function() {
     const placa = document.getElementById('select-placa').value;
     const veiculo = window.baseFrota.find(v => v.placa === placa);
-    
+ }
     if (veiculo) {
         document.getElementById('input-modelo').value = veiculo.modelo;
         document.getElementById('input-km-saida').value = veiculo.kmAtual;
