@@ -382,14 +382,18 @@ onValue(ref(db), (snapshot) => {
     const data = snapshot.val();
     if (!data) return;
 
+    // Salva os dados brutos (importante para achar a chave na hora de editar/deletar)
+    window.rawBaseFrotaData = data.baseFrota;
+
     // Sincroniza o que vem da nuvem com as variáveis do seu código
     window.baseFrota = data.baseFrota ? Object.values(data.baseFrota) : [];
     window.emTransito = data.emTransito ? 
         Object.keys(data.emTransito).map(key => ({...data.emTransito[key], firebaseKey: key})) : [];
     window.historico = data.historico ? Object.values(data.historico) : [];
 
-    // IMPORTANTE: Avisa o sistema para redesenhar a tela
-    window.carregarSelect(); 
+    // Atualiza todas as partes da tela
+    window.renderizarTabelaGestao();
+    window.carregarSelect();
     window.atualizarTabelas();
 });
 
@@ -941,37 +945,38 @@ window.registrarEntrada = function() {
             }
         });
     }
+window.renderizarTabelaGestao = function() {
+    const tb = document.querySelector('#tabela-gestao tbody'); 
+    if (!tb) return;
+    tb.innerHTML = '';
 
-    // FUNÇÕES DE GESTÃO E EDIÇÃO RÁPIDA (Melhoria 1 e 5)
-    function renderizarTabelaGestao() {
-        const tb = document.querySelector('#tabela-gestao tbody'); tb.innerHTML = '';
-        baseFrota.forEach(i => {
-            const tr = document.createElement('tr');
-            
-            // Checagem de Revisão Proativa (Melhoria 5)
-            let alertaRevisao = '';
-            if (i.kmRevisao && i.kmAtual) {
-                const kmRestante = i.kmRevisao - i.kmAtual;
-                if (kmRestante <= 1000 && kmRestante > 0) {
-                    alertaRevisao = `<i class="fa-solid fa-triangle-exclamation" style="color:var(--warning); margin-left: 5px;" title="Revisão Próxima: ${kmRestante} km restantes"></i>`;
-                } else if (kmRestante <= 0) {
-                    alertaRevisao = `<i class="fa-solid fa-skull-crossbones" style="color:var(--danger); margin-left: 5px;" title="REVISÃO VENCIDA!"></i>`;
-                }
+    // Usa window.baseFrota que é alimentada pelo Firebase
+    window.baseFrota.forEach(i => {
+        const tr = document.createElement('tr');
+        
+        let alertaRevisao = '';
+        if (i.kmRevisao && i.kmAtual) {
+            const kmRestante = i.kmRevisao - i.kmAtual;
+            if (kmRestante <= 1000 && kmRestante > 0) {
+                alertaRevisao = `<i class="fa-solid fa-triangle-exclamation" style="color:var(--warning); margin-left: 5px;" title="Revisão Próxima: ${kmRestante} km restantes"></i>`;
+            } else if (kmRestante <= 0) {
+                alertaRevisao = `<i class="fa-solid fa-skull-crossbones" style="color:var(--danger); margin-left: 5px;" title="REVISÃO VENCIDA!"></i>`;
             }
-            
-            tr.innerHTML = `
-                <td>${i.placa}</td>
-                <td>${i.modelo}</td>
-                <td>${i.kmAtual||0} ${alertaRevisao}</td>
-                <td>${i.kmRevisao||'-'}</td>
-                <td>
-                    <button onclick="editarVeiculo('${i.placa}')" style="color:var(--primary); background:none;border:none;cursor:pointer;margin-right:10px;"><i class="fa-solid fa-pen-to-square"></i></button>
-                    <button onclick="deletarVeiculo('${i.placa}')" style="color:var(--danger);background:none;border:none;cursor:pointer"><i class="fa-solid fa-trash"></i></button>
-                </td>
-            `;
-            tb.appendChild(tr);
-        });
-    }
+        }
+        
+        tr.innerHTML = `
+            <td>${i.placa}</td>
+            <td>${i.modelo}</td>
+            <td>${i.kmAtual || 0} ${alertaRevisao}</td>
+            <td>${i.kmRevisao || '-'}</td>
+            <td>
+                <button onclick="window.editarVeiculo('${i.placa}')" style="color:var(--primary); background:none;border:none;cursor:pointer;margin-right:10px;"><i class="fa-solid fa-pen-to-square"></i></button>
+                <button onclick="window.deletarVeiculo('${i.placa}')" style="color:var(--danger);background:none;border:none;cursor:pointer"><i class="fa-solid fa-trash"></i></button>
+            </td>
+        `;
+        tb.appendChild(tr);
+    });
+}
 
     // Inicia o modo de edição (Melhoria 1)
     window.editarVeiculo = function(placa) {
@@ -993,36 +998,46 @@ window.registrarEntrada = function() {
         Swal.fire({ icon: 'info', title: 'Modo Edição', text: 'Você está editando o veículo. Clique em ATUALIZAR para salvar.', timer: 3000, showConfirmButton: false });
     }
 
-    window.salvarVeiculo = function() {
-        const placaInput = document.getElementById('gestao-placa');
-        const p = placaInput.value.trim().toUpperCase();
-        if(!p) return Swal.fire('Erro', 'A placa é obrigatória.', 'error');
-        
-        const obj = { 
-            placa: p, 
-            modelo: document.getElementById('gestao-modelo').value.trim(), 
-            condutor: document.getElementById('gestao-condutor').value.trim(), 
-            kmAtual: parseInt(document.getElementById('gestao-km-atual').value)||0, 
-            kmRevisao: parseInt(document.getElementById('gestao-km-revisao').value)||0 
-        };
-        
-        const isEditing = placaInput.readOnly; 
-        let message = 'Salvo';
+ window.salvarVeiculo = function() {
+    const placaInput = document.getElementById('gestao-placa');
+    const p = placaInput.value.trim().toUpperCase();
+    if(!p) return Swal.fire('Erro', 'A placa é obrigatória.', 'error');
+    
+    const obj = { 
+        placa: p, 
+        modelo: document.getElementById('gestao-modelo').value.trim(), 
+        condutor: document.getElementById('gestao-condutor').value.trim(), 
+        kmAtual: parseInt(document.getElementById('gestao-km-atual').value) || 0, 
+        kmRevisao: parseInt(document.getElementById('gestao-km-revisao').value) || 0 
+    };
+    
+    const isEditing = placaInput.readOnly; 
 
-        if(isEditing) {
-            const idx = baseFrota.findIndex(x=>x.placa===p);
-            if(idx!==-1) baseFrota[idx]=obj;
-            message = 'Atualizado';
-        } else {
-            if(baseFrota.find(x=>x.placa===p)) return Swal.fire('Erro', 'Placa já cadastrada.', 'error');
-            baseFrota.push(obj);
-            message = 'Criado';
+    if(isEditing) {
+        // Busca a chave única do Firebase para este veículo
+        // Nota: Assumindo que sua baseFrota no Firebase usa as chaves do push()
+        // Se você salvou como baseFrota/PLACA, use ref(db, 'baseFrota/' + p)
+        const veiculoFirebase = Object.entries(window.rawBaseFrotaData || {}).find(([key, val]) => val.placa === p);
+        
+        if(veiculoFirebase) {
+            set(ref(db, `baseFrota/${veiculoFirebase[0]}`), obj)
+                .then(() => {
+                    Swal.fire('Atualizado', '', 'success');
+                    window.limparFormGestao();
+                });
         }
-
-        salvarTudo(); 
-        limparFormGestao();
-        Swal.fire(message, '', 'success');
+    } else {
+        // Verifica duplicidade na variável global sincronizada
+        if(window.baseFrota.find(x => x.placa === p)) {
+            return Swal.fire('Erro', 'Placa já cadastrada no Banco de Dados.', 'error');
+        }
+        
+        push(ref(db, 'baseFrota'), obj).then(() => {
+            Swal.fire('Criado', 'Veículo salvo na nuvem', 'success');
+            window.limparFormGestao();
+        });
     }
+}
 
     window.limparFormGestao = function() { 
         document.getElementById('gestao-placa').value=""; 
@@ -1037,19 +1052,28 @@ window.registrarEntrada = function() {
         document.querySelector('#aba-gestao .chart-card button.btn-action[onclick="salvarVeiculo()"]').innerHTML = 'SALVAR <i class="fa-solid fa-floppy-disk"></i>';
     }
 
-    window.deletarVeiculo = function(p) { Swal.fire({title:`Deletar ${p}?`, showCancelButton:true, confirmButtonColor:'var(--danger)'}).then(r=>{ if(r.isConfirmed){ baseFrota=baseFrota.filter(x=>x.placa!==p); salvarTudo(); }}); }
-    
-    // FUNÇÃO PRINCIPAL DE SALVAR
-   // function salvarTudo() {
-       // localStorage.setItem('frota_base_v3', JSON.stringify(baseFrota));
-       // localStorage.setItem('frota_em_transito_v3', JSON.stringify(emTransito));
-       // localStorage.setItem('frota_manutencao_v3', JSON.stringify(emManutencao));
-       // localStorage.setItem('frota_historico_v3', JSON.stringify(historico));
-       // localStorage.setItem('frota_historico_manutencao_v3', JSON.stringify(historicoManutencao)); 
-       // salvarCategorias(); 
-       // atualizarTabelas();
-   // }
-    
+     window.deletarVeiculo = function(p) {
+    Swal.fire({
+        title: `Deletar ${p}?`,
+        text: "Esta ação não pode ser desfeita na nuvem.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: 'var(--danger)',
+        confirmButtonText: 'Sim, deletar!'
+    }).then(r => {
+        if(r.isConfirmed) {
+            // Encontra a chave do Firebase baseada na placa
+            const veiculoFirebase = Object.entries(window.rawBaseFrotaData || {}).find(([key, val]) => val.placa === p);
+            
+            if(veiculoFirebase) {
+                remove(ref(db, `baseFrota/${veiculoFirebase[0]}`))
+                    .then(() => Swal.fire('Deletado!', '', 'success'));
+            } else {
+                Swal.fire('Erro', 'Não foi possível localizar o ID do veículo.', 'error');
+            }
+        }
+    });
+}
     function atualizarRelogio() { document.getElementById('relogio').innerText = new Date().toLocaleTimeString(); }
     function formatarHora(ts) { return new Date(ts).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}); }
     function calcularTempo(ms) { const h=Math.floor(ms/3600000), m=Math.round((ms%3600000)/60000); return `${h}h ${m}m`; }
