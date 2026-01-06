@@ -605,16 +605,15 @@ window.carregarSelect = function() {
     const select = document.getElementById('select-placa');
     if (!select) return;
 
-    // Limpa o select e adiciona a opção inicial
     select.innerHTML = '<option value="">-- Toque para selecionar --</option>';
 
-    // Filtra apenas veículos que possuem placa para evitar o erro de undefined
-    const frotaValida = (window.baseFrota || []).filter(v => v && v.placa);
+    // Filtra apenas veículos que possuem placa válida para evitar erro de undefined
+    const frotaLimpa = (window.baseFrota || []).filter(v => v && v.placa);
 
-    // Ordena de forma segura
-    frotaValida.sort((a, b) => a.placa.localeCompare(b.placa));
+    // Ordena as placas em ordem alfabética
+    frotaLimpa.sort((a, b) => String(a.placa).localeCompare(String(b.placa)));
 
-    frotaValida.forEach(v => {
+    frotaLimpa.forEach(v => {
         const option = document.createElement('option');
         option.value = v.placa;
         option.textContent = v.placa;
@@ -1409,28 +1408,27 @@ window.renderizarTabelaGestao = function() {
         r.readAsText(i.files[0]); 
     }
 window.exportarExcel = function() {
-    // Tenta pegar dados do histórico ou da lista geral se o histórico estiver vazio
-    const dados = window.historicoManutencao || [];
+    // Busca dados do histórico filtrado na tela ou do histórico geral
+    const dadosParaExportar = window.historicoFiltrado || window.historicoManutencao || [];
 
-    if (dados.length === 0) {
+    if (dadosParaExportar.length === 0) {
         Swal.fire('Aviso', 'Não há dados carregados para exportar.', 'warning');
         return;
     }
 
-    const rows = dados.map(i => {
-        // Cálculo de KM Rodados seguro
+    // Mapeia os dados garantindo que nenhum campo fique undefined
+    const rows = dadosParaExportar.map(i => {
         const kmS = parseInt(i.kmSaida) || 0;
         const kmF = parseInt(i.kmFinal || i.kmRetorno) || 0;
-        const totalRodado = kmF > 0 ? (kmF - kmS) : 0;
-
+        
         return {
-            "Data Saída": i.saida ? new Date(i.saida).toLocaleDateString() : "---",
-            "Hora Saída": window.formatarHora(i.saida),
+            "Data": i.data || (i.saida ? new Date(i.saida).toLocaleDateString() : "---"),
             "Placa": i.placa || "---",
             "Condutor": i.condutor || "---",
             "KM Saída": kmS,
-            "KM Retorno": kmF > 0 ? kmF : "Em trânsito",
-            "KM Rodados": totalRodado,
+            "KM Retorno": kmF > 0 ? kmF : "---",
+            "KM Rodados": (kmF > 0 && kmF >= kmS) ? (kmF - kmS) : 0,
+            "Tempo Viagem": (i.saida && i.retorno) ? window.calcularTempo(new Date(i.retorno) - new Date(i.saida)) : "---",
             "Obs": i.justificativa || i.obs || "-"
         };
     });
@@ -1438,7 +1436,8 @@ window.exportarExcel = function() {
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Historico");
-    XLSX.writeFile(workbook, `Frota_Relatorio_${new Date().getTime()}.xlsx`);
+    
+    XLSX.writeFile(workbook, `Relatorio_Frota_${new Date().getTime()}.xlsx`);
 };
     // NO FINAL DO ARQUIVO:
 // --- FUNÇÃO DE LOGOUT CORRIGIDA ---
