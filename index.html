@@ -365,20 +365,18 @@ onAuthStateChanged(auth, (user) => {
     const appScreen = document.getElementById('app-screen');
 
     if (user) {
-        // Usuário logado: Mostra o App, esconde o Login
         if (loginScreen) loginScreen.style.display = 'none';
         if (appScreen) appScreen.style.display = 'block';
-        console.log("Usuário conectado:", user.email);
     } else {
-        // Usuário deslogado: Mostra o Login, esconde o App
+        // Se deslogou, força a volta para a tela de login
         if (loginScreen) loginScreen.style.display = 'flex';
         if (appScreen) appScreen.style.display = 'none';
-        console.log("Nenhum usuário conectado. Indo para tela de login.");
     }
 });
 
     //(Variáveis de Controle) ---
 window.paginaAtual = 1;
+window.categoriasManutencao = ['Mecânica', 'Elétrica', 'Pneus', 'Troca de Óleo', 'Limpeza', 'Outros']; 
 window.itensPorPagina = 10;
 window.historicoFiltradoCache = [];
 
@@ -598,17 +596,19 @@ window.registrarSaida = function() {
     };
 
     // 2. ENVIO PARA O FIREBASE
-    push(ref(db, 'emTransito'), dadosSaida).then(() => {
+ push(ref(db, 'emTransito'), dadosSaida).then(() => {
         Swal.fire('Sucesso', `Saída registrada para ${placa}.`, 'success');
         
-        // Limpa os campos após o sucesso
+        // Limpa os campos de texto (input)
         document.getElementById('input-condutor').value = '';
-        document.getElementById('display-modelo').innerText = '-';
-        document.getElementById('display-km').innerText = '-';
+        document.getElementById('input-modelo').value = '';
+        document.getElementById('input-km-saida').value = '';
         document.getElementById('select-placa').value = '';
-    }).catch(err => {
-        Swal.fire('Erro', 'Falha ao salvar: ' + err.message, 'error');
-    });
+        
+        // Limpa o status de revisão se ele existir
+        const statusTexto = document.getElementById('status-texto');
+        if(statusTexto) statusTexto.innerHTML = 'Aguardando...';
+    })
 };
     
 window.registrarEntrada = function() {
