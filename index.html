@@ -856,6 +856,7 @@ window.registrarEntrada = function() {
          // --- DENTRO DO SEU LOOP LISTATRANSITO.FOREACH ---
 const diff = new Date() - new Date(i.saida); // Calcula o tempo de rua
 const tr = document.createElement('tr');
+            console.log("VEÍCULO ENCONTRADO:", i);
 
 // O tr.innerHTML que você já tem (com os data-labels para o celular)
 tr.innerHTML = `
@@ -1399,17 +1400,23 @@ window.renderizarTabelaGestao = function() {
         URL.revokeObjectURL(url);
     };
     // NO FINAL DO ARQUIVO:
+// --- FUNÇÃO DE LOGOUT CORRIGIDA ---
 window.fazerLogout = function() {
-    const { getAuth, signOut } = window.FirebaseAuth; // Garante que pega a referência correta
-    const auth = getAuth();
-    
-    signOut(auth).then(() => {
-        console.log("Sessão encerrada");
-        // Força o recarregamento para garantir que volte à tela de login limpa
-        window.location.reload(); 
-    }).catch((error) => {
-        alert("Erro ao sair: " + error.message);
-    });
+    // Tenta usar a variável 'auth' global que você definiu no topo
+    if (typeof auth !== 'undefined') {
+        signOut(auth).then(() => {
+            console.log("Sessão encerrada com sucesso");
+            window.location.reload(); // Recarrega para limpar tudo e ir pro login
+        }).catch((error) => {
+            console.error("Erro ao deslogar:", error);
+            alert("Erro ao sair: " + error.message);
+        });
+    } else {
+        // Caso a variável 'auth' não seja global, tenta pegá-la de novo
+        console.warn("Variável 'auth' não encontrada, tentando via getAuth()");
+        const { getAuth, signOut: firebaseSignOut } = FirebaseAuth; // Ajuste conforme seu import
+        firebaseSignOut(getAuth()).then(() => window.location.reload());
+    }
 };
 </script>
 </body>
