@@ -395,6 +395,7 @@ onValue(ref(db), (snapshot) => {
     window.renderizarTabelaGestao();
     window.carregarSelect();
     window.atualizarTabelas();
+    window.renderizarHistorico(); // <--- Esta linha faz o histórico aparecer
 });
 
 // --- CONTINUAÇÃO DO SEU CÓDIGO (VARIÁVEIS DE ELEMENTOS) ---
@@ -483,8 +484,6 @@ window.carregarSelect = function() {
     }
 };
 
-      
-    
 
     window.registrarSaida = function() {
     // Validação básica (ajuste os IDs se forem diferentes no seu HTML)
@@ -542,11 +541,13 @@ window.registrarEntrada = function() {
                 remove(ref(db, `emTransito/${chaveParaDeletar}`));
                 
                 // 3. Atualiza o KM na Base da Frota (Nuvem)
-                // Precisamos achar o ID correto na baseFrota para atualizar
-                const indexNaBase = window.baseFrota.findIndex(v => v.placa === placa);
-                if(indexNaBase !== -1) {
-                    set(ref(db, `baseFrota/${indexNaBase}/kmAtual`), kmChegada);
-                }
+               // 3.1. Atualiza o KM na Base da Frota (Nuvem) de forma correta
+// Em vez de usar indexNaBase (que gera o erro de duplicar/undefined), buscamos o ID real
+const veiculoFirebase = Object.entries(window.rawBaseFrotaData || {}).find(([key, val]) => val.placa === placa);
+if (veiculoFirebase) {
+    // Atualiza apenas o campo kmAtual dentro do ID correto na nuvem
+    set(ref(db, `baseFrota/${veiculoFirebase[0]}/kmAtual`), kmChegada);
+}
 
                 Swal.fire('Sucesso', 'Baixa realizada e sincronizada!', 'success');
             });
@@ -708,39 +709,33 @@ window.registrarEntrada = function() {
     }
 
     // FUNÇÕES DE MANUTENÇÃO
-    window.renderizarTabelaManutencao = function() {
-        const txt = document.getElementById('filtro-manut-texto').value.toUpperCase();
+   window.renderizarHistorico = function() {
+    const tb = document.querySelector('#tabela-historico tbody');
+    if (!tb) return;
+    tb.innerHTML = '';
 
-        const tbAtiva = document.querySelector('#tabela-manutencao-ativa tbody'); tbAtiva.innerHTML = '';
-        const manutencaoAtivaFiltrada = emManutencao.filter(i => (i.placa+i.categoria+i.motivo).toUpperCase().includes(txt));
-        
-        document.getElementById('count-manutencao-ativa').innerText = manutencaoAtivaFiltrada.length;
-        
-        if(manutencaoAtivaFiltrada.length === 0) {
-            tbAtiva.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:#94a3b8;">Nenhum veículo em manutenção ativa.</td></tr>`;
-        } else {
-            manutencaoAtivaFiltrada.forEach(i => {
-                const tr = document.createElement('tr');
-                const diff = new Date() - i.dataInicio;
-                tr.innerHTML = `<td><strong>${i.placa}</strong></td><td>${i.modelo}</td><td>${i.categoria || 'Geral'}</td><td>${i.motivo}</td><td>${new Date(i.dataInicio).toLocaleDateString()}</td><td>${calcularTempoParado(diff)}</td><td><button onclick="retornarDaManutencao('${i.placa}')" class="btn-action" style="background:var(--success); padding:6px 10px; font-size:0.8rem;"><i class="fa-solid fa-check"></i> BAIXAR</button></td>`;
-                tbAtiva.appendChild(tr);
-            });
-        }
+    // Pegamos a lista da nuvem e usamos o reverse() para os novos aparecerem no topo
+    const lista = [...(window.historico || [])].reverse();
 
-        const tbHistorico = document.querySelector('#tabela-manutencao-historico tbody'); tbHistorico.innerHTML = '';
-        const historicoFiltrado = historicoManutencao.filter(i => (i.placa+i.categoria+i.motivo).toUpperCase().includes(txt));
-        
-        if(historicoFiltrado.length === 0) {
-            tbHistorico.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:#94a3b8;">Nenhum registro de manutenção finalizada.</td></tr>`;
-        } else {
-            historicoFiltrado.forEach(i => {
-                const tr = document.createElement('tr');
-                const duracaoMs = i.dataFim - i.dataInicio;
-                tr.innerHTML = `<td><strong>${i.placa}</strong></td><td>${i.categoria || 'Geral'}</td><td>${i.motivo}</td><td>${new Date(i.dataInicio).toLocaleDateString()}</td><td>${new Date(i.dataFim).toLocaleDateString()}</td><td>${calcularTempoParado(duracaoMs)}</td>`;
-                tbHistorico.appendChild(tr);
-            });
-        }
-    }
+    lista.forEach(h => {
+        const tr = document.createElement('tr');
+        // Calcula a quilometragem percorrida na hora para exibir
+        const kmRodados = h.kmChegada - h.kmSaida;
+
+        tr.innerHTML = `
+            <td>${h.placa}</td>
+            <td>${h.condutor}</td>
+            <td>${h.kmSaida} → ${h.kmChegada} <br><small>(${kmRodados} km)</small></td>
+            <td>
+                <span style="font-size:0.8rem;">
+                    Saída: ${new Date(h.saida).toLocaleString('pt-BR')} <br>
+                    Chegada: ${new Date(h.chegada).toLocaleString('pt-BR')}
+                </span>
+            </td>
+        `;
+        tb.appendChild(tr);
+    });
+};
     
     // FUNÇÕES DE DASHBOARD
     window.atualizarDashboard = function() {
