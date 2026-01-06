@@ -145,7 +145,7 @@
     </header>
 
     <div class="tabs">
-        <button class="tab-btn active" onclick="mudarAba('monitoramento')"><i class="fa-solid fa-map-location-dot"></i> Monitoramento</button>
+        <button class="tab-btn active" onclick="window.mudarAba('monitoramento')"><i class="fa-solid fa-map-location-dot"></i> Monitoramento</button>
         <button class="tab-btn admin-only" onclick="window.mudarAba('dashboard')"><i class="fa-solid fa-chart-pie"></i> Dashboard Pro</button>
         <button class="tab-btn admin-only" onclick="window.mudarAba('manutencao')"><i class="fa-solid fa-wrench"></i> Manutenção</button>
         <button class="tab-btn admin-only" onclick="window.mudarAba('historico')"><i class="fa-solid fa-clock-rotate-left"></i> Histórico</button>
@@ -153,7 +153,7 @@
     </div>
 
     <nav class="bottom-nav">
-        <button class="nav-item active" onclick="mudarAba('monitoramento')"><i class="fa-solid fa-map-location-dot"></i><span>Monitor</span></button>
+        <button class="nav-item active" onclick="window.mudarAba('monitoramento')"><i class="fa-solid fa-map-location-dot"></i><span>Monitor</span></button>
         <button class="nav-item admin-only" onclick="window.mudarAba('dashboard')"><i class="fa-solid fa-chart-pie"></i><span>Dash</span></button>
         <button class="nav-item admin-only" onclick="window.mudarAba('manutencao')"><i class="fa-solid fa-wrench"></i><span>Manut</span></button>
         <button class="nav-item admin-only" onclick="window.mudarAba('historico')"><i class="fa-solid fa-clock-rotate-left"></i><span>Hist</span></button>
@@ -359,6 +359,11 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
+    //(Variáveis de Controle) ---
+window.paginaAtual = 1;
+window.itensPorPagina = 10;
+window.historicoFiltradoCache = [];
+
 // Referências globais
 const baseFrotaRef = ref(db, 'baseFrota');
 const emTransitoRef = ref(db, 'emTransito');
@@ -377,6 +382,7 @@ const historicoRef = ref(db, 'historico');
     }
 
 // --- 2. OUVINTE TEMPO REAL ---
+
 // Este bloco substitui o localStorage e atualiza o site sozinho
 onValue(ref(db), (snapshot) => {
     const data = snapshot.val();
@@ -390,7 +396,8 @@ onValue(ref(db), (snapshot) => {
     window.emTransito = data.emTransito ? 
         Object.keys(data.emTransito).map(key => ({...data.emTransito[key], firebaseKey: key})) : [];
     window.historico = data.historico ? Object.values(data.historico) : [];
-
+// IMPORTANTE: Toda vez que os dados mudarem, resetamos o filtro para refletir a nuvem
+    window.historicoFiltradoCache = [...window.historico];
     // Atualiza todas as partes da tela
     window.renderizarTabelaGestao();
     window.carregarSelect();
@@ -634,26 +641,59 @@ window.registrarEntrada = function() {
         });
     }
 
-    function atualizarTabelas() {
-        const tbRua = document.querySelector('#tabela-transito tbody'); tbRua.innerHTML = '';
-        if(emTransito.length === 0) tbRua.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:#94a3b8;">Nenhum veículo na rua.</td></tr>`;
-        else {
-            emTransito.forEach(i => {
-                const diff = new Date() - i.saida;
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td data-label="Placa"><strong>${i.placa}</strong></td><td data-label="Condutor">${i.condutor}</td><td data-label="KM">${i.kmSaida}</td><td data-label="Status"><span class="badge status-rua" style="background:${i.status === 'RUA' ? '#fef3c7' : '#e0f2fe'}; color:${i.status === 'RUA' ? '#b45309' : '#0369a1'}">${i.status}</span></td><td data-label="Saída">${formatarHora(i.saida)}</td><td data-label="Tempo"><span class="badge-tempo">${calcularTempo(diff)}</span></td><td data-label="Ação"><button onclick="baixaRapida('${i.placa}')" style="background:var(--success);color:white;border:none;border-radius:8px;padding:6px 12px;cursor:pointer;font-weight:bold;">⬇️ BAIXAR</button></td>`;
-                tbRua.appendChild(tr);
-            });
-        }
-        
-        if(currentUserRole === 'admin') {
-            renderizarTabelaManutencao(); 
-            filtrarHistorico(); // Garante que o histórico seja carregado/filtrado
-            renderizarTabelaGestao(); 
-            renderizarCategoriasGestao();
-        }
-        atualizarIndicadores();
+   window.atualizarTabelas = function() {
+    const tbRua = document.querySelector('#tabela-transito tbody'); 
+    if (!tbRua) return;
+    tbRua.innerHTML = '';
+    
+    // CORREÇÃO: Usa window.emTransito que vem do Firebase
+    const listaTransito = window.emTransito || [];
+
+    if(listaTransito.length === 0) {
+        tbRua.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:#94a3b8;">Nenhum veículo na rua.</td></tr>`;
+    } else {
+        listaTransito.forEach(i => {
+            const diff = new Date() - new Date(i.saida);
+            const tr = document.createElement('tr');
+            
+            // CORREÇÃO: O botão agora chama window.baixaRapida
+            tr.innerHTML = `
+                <td data-label="Placa"><strong>${i.placa}</strong></td>
+                <td data-label="Condutor">${i.condutor}</td>
+                <td data-label="KM">${i.kmSaida}</td>
+                <td data-label="Status">
+                    <span class="badge status-rua" style="background:#fef3c7; color:#b45309">EM TRÂNSITO</span>
+                </td>
+                <td data-label="Saída">${formatarHora(i.saida)}</td>
+                <td data-label="Tempo"><span class="badge-tempo">${calcularTempo(diff)}</span></td>
+                <td data-label="Ação">
+                    <button onclick="window.baixaRapida('${i.placa}')" style="background:var(--success);color:white;border:none;border-radius:8px;padding:6px 12px;cursor:pointer;font-weight:bold;">⬇️ BAIXAR</button>
+                </td>`;
+            tbRua.appendChild(tr);
+        });
     }
+    
+    // CORREÇÃO: Verifica o papel do usuário usando window
+    if(window.currentUserRole === 'admin') {
+        if (typeof window.renderizarTabelaManutencao === 'function') window.renderizarTabelaManutencao(); 
+        if (typeof window.renderizarHistorico === 'function') window.renderizarHistorico(); 
+        if (typeof window.renderizarTabelaGestao === 'function') window.renderizarTabelaGestao(); 
+        if (typeof window.renderizarCategoriasGestao === 'function') window.renderizarCategoriasGestao();
+    }
+    
+    if (typeof window.atualizarIndicadores === 'function') window.atualizarIndicadores();
+}
+
+// Crie também este atalho para a baixa rápida funcionar
+window.baixaRapida = function(placa) {
+    // Seta a placa no select e dispara a função de entrada
+    const select = document.getElementById('select-placa');
+    if(select) {
+        select.value = placa;
+        window.preencherDados(); // Atualiza os campos na tela
+        window.registrarEntrada(); // Abre o alerta de KM de chegada
+    }
+};
 
     // FUNÇÕES DE GESTÃO DE CATEGORIAS (Melhoria 3)
     window.salvarCategorias = function() {
@@ -844,60 +884,87 @@ window.registrarEntrada = function() {
         });
     }
 
-    function atualizarIndicadores() {
-        const tRua = emTransito.length; const tMan = emManutencao.length; const tGar = baseFrota.length - tRua - tMan;
-        document.getElementById('count-rua').innerText = tRua;
-        document.getElementById('count-manutencao').innerText = tMan;
-        document.getElementById('count-garagem').innerText = tGar < 0 ? 0 : tGar;
-    }
+window.atualizarIndicadores = function() {
+    // CORREÇÃO: Usa window. para acessar os dados do Firebase
+    const tRua = (window.emTransito || []).length; 
+    const tMan = (window.emManutencao || []).length; 
+    const tGar = (window.baseFrota || []).length - tRua - tMan;
     
+    document.getElementById('count-rua').innerText = tRua;
+    document.getElementById('count-manutencao').innerText = tMan;
+    document.getElementById('count-garagem').innerText = tGar < 0 ? 0 : tGar;
+}
     // FUNÇÕES DE HISTÓRICO
-    window.filtrarHistorico = function() {
-        const p = document.getElementById('filtro-hist-texto').value.toUpperCase();
-        const dI = document.getElementById('filtro-data-inicio').value;
-        const dF = document.getElementById('filtro-data-fim').value;
-        const inicioTs = dI ? new Date(dI).getTime() : 0;
-        // Adiciona 1 dia (86400000 ms) para incluir o dia final completo
-        const fimTs = dF ? new Date(dF).getTime() + 86400000 : Infinity; 
+   window.filtrarHistorico = function() {
+    const p = document.getElementById('filtro-hist-texto').value.toUpperCase();
+    const dI = document.getElementById('filtro-data-inicio').value;
+    const dF = document.getElementById('filtro-data-fim').value;
+    
+    // Converte datas para comparação numérica
+    const inicioTs = dI ? new Date(dI).getTime() : 0;
+    const fimTs = dF ? new Date(dF).getTime() + 86400000 : Infinity; 
 
-        historicoFiltradoCache = historico.filter(i => {
-            const dataOk = i.saida >= inicioTs && i.saida <= fimTs;
-            const textoOk = (i.placa + i.condutor + i.justificativa).toUpperCase().includes(p);
-            return dataOk && textoOk;
-        });
+    // CORREÇÃO: Usa window.historico e garante que a data seja comparada corretamente
+    window.historicoFiltradoCache = (window.historico || []).filter(i => {
+        const saidaData = new Date(i.saida).getTime(); // Converte a data salva para timestamp
+        const dataOk = saidaData >= inicioTs && saidaData <= fimTs;
+        
+        // CORREÇÃO: Proteção caso justificativa seja nula
+        const textoOk = (i.placa + i.condutor + (i.justificativa || "")).toUpperCase().includes(p);
+        return dataOk && textoOk;
+    });
 
-        paginaAtual = 1;
-        renderizarHistorico();
+   
+    window.renderizarHistorico();
+}
+
+window.renderizarHistorico = function() {
+    const tb = document.querySelector('#tabela-historico tbody'); 
+    if (!tb) return;
+    tb.innerHTML = '';
+    
+    // CORREÇÃO: Garante que as variáveis de paginação existam
+    const start = ((window.paginaAtual || 1) - 1) * (window.itensPorPagina || 10);
+    const end = start + (window.itensPorPagina || 10);
+    
+    // Define qual lista usar (filtrada ou total)
+    let itens = (window.historicoFiltradoCache && window.historicoFiltradoCache.length > 0) 
+                ? window.historicoFiltradoCache 
+                : (window.historico || []);
+
+    // Ordena para mostrar os mais recentes primeiro
+    itens = [...itens].sort((a, b) => new Date(b.saida) - new Date(a.saida));
+
+    const paginaItens = itens.slice(start, end);
+    const totalPaginas = Math.ceil(itens.length / (window.itensPorPagina || 10));
+
+    const pageInfo = document.getElementById('page-info');
+    if (pageInfo) {
+        pageInfo.innerText = `Página ${window.paginaAtual || 1} de ${totalPaginas === 0 ? 1 : totalPaginas}`;
     }
 
-    window.renderizarHistorico = function() {
-        const tb = document.querySelector('#tabela-historico tbody'); tb.innerHTML = '';
-        const start = (paginaAtual - 1) * itensPorPagina;
-        const end = start + itensPorPagina;
-        const itens = historicoFiltradoCache.length > 0 ? historicoFiltradoCache : historico;
-        const paginaItens = itens.slice(start, end);
-        const totalPaginas = Math.ceil(itens.length / itensPorPagina);
-
-        document.getElementById('page-info').innerText = `Página ${paginaAtual} de ${totalPaginas === 0 ? 1 : totalPaginas}`;
-
-        if(paginaItens.length === 0) {
-            tb.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:#94a3b8;">Nenhum registro encontrado.</td></tr>`;
-            return;
-        }
-
-        paginaItens.forEach(i => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td data-label="Data"><strong>${new Date(i.saida).toLocaleDateString()}</strong></td>
-                <td data-label="Placa">${i.placa}</td>
-                <td data-label="Condutor">${i.condutor}</td>
-                <td data-label="KM Rodados">${i.kmRodados} km</td>
-                <td data-label="Obs">${i.justificativa || i.status}</td>
-                <td data-label="Ação" class="admin-only"><button onclick="deletarHistorico('${i.placa}', ${i.saida})" style="color:var(--danger);background:none;border:none;cursor:pointer"><i class="fa-solid fa-trash"></i></button></td>
-            `;
-            tb.appendChild(tr);
-        });
+    if(paginaItens.length === 0) {
+        tb.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:#94a3b8;">Nenhum registro encontrado.</td></tr>`;
+        return;
     }
+
+    paginaItens.forEach(i => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td data-label="Data"><strong>${new Date(i.saida).toLocaleDateString()}</strong></td>
+            <td data-label="Placa">${i.placa}</td>
+            <td data-label="Condutor">${i.condutor}</td>
+            <td data-label="KM Rodados">${i.kmRodados || 0} km</td>
+            <td data-label="Obs">${i.justificativa || i.status || '-'}</td>
+            <td data-label="Ação" class="admin-only">
+                <button onclick="window.deletarHistorico('${i.placa}', '${i.saida}')" style="color:var(--danger);background:none;border:none;cursor:pointer">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </td>
+        `;
+        tb.appendChild(tr);
+    });
+}
 
     window.mudarPagina = function(delta) {
         const itens = historicoFiltradoCache.length > 0 ? historicoFiltradoCache : historico;
