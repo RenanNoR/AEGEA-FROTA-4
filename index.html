@@ -345,7 +345,7 @@
 // --- 1. CONFIGURAÇÃO FIREBASE ---
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getDatabase, ref, push, onValue, set, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-
+import { getAuth, signOut, onAuthStateChanged, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 const firebaseConfig = {
     apiKey: "AIzaSyAR87299J4SWl8qz9zX9_cNjJMoiXfRdDc",
     authDomain: "aegea-21b34.firebaseapp.com",
@@ -358,6 +358,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
+const auth = getAuth(app);
 
     //(Variáveis de Controle) ---
 window.paginaAtual = 1;
@@ -1286,6 +1287,16 @@ window.renderizarTabelaGestao = function() {
         
         URL.revokeObjectURL(url);
     };
+    // NO FINAL DO ARQUIVO:
+window.logout = function() {
+    // Usamos o auth que inicializamos no passo anterior
+    signOut(auth).then(() => {
+        // Sucesso: a tela de login aparecerá sozinha pelo onAuthStateChanged
+        console.log("Sessão encerrada");
+    }).catch((error) => {
+        console.error("Erro ao sair:", error);
+    });
+};
 </script>
 </body>
 </html>  
