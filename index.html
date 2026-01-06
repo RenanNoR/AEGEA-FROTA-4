@@ -470,6 +470,7 @@ onValue(ref(db), (snapshot) => {
     window.historico = data.historico ? Object.values(data.historico) : [];
 // IMPORTANTE: Toda vez que os dados mudarem, resetamos o filtro para refletir a nuvem
     window.historicoFiltradoCache = [...window.historico];
+    window.historicoManutencao = [];
     // Atualiza todas as partes da tela
     window.renderizarTabelaGestao();
     window.carregarSelect();
@@ -925,36 +926,44 @@ window.baixaRapida = function(placa) {
             peakChart.appendChild(col);
         });
     }
-    window.renderizarChartManutencaoCat = function() {
-        const container = document.getElementById('chart-manutencao-cat');
-        container.innerHTML = '';
-        const counts = historicoManutencao.reduce((acc, curr) => {
-            acc[curr.categoria] = (acc[curr.categoria] || 0) + 1;
-            return acc;
-        }, {});
-
-        const total = historicoManutencao.length;
-        if (total === 0) {
-            container.innerHTML = `<div style="text-align:center; color:#ccc; padding:30px;">Sem histórico de manutenção.</div>`;
-            return;
-        }
-
-        const sortedCats = Object.entries(counts).sort(([, a], [, b]) => b - a);
-
-        sortedCats.forEach(([cat, count]) => {
-            const percent = (count / total) * 100;
-            const row = document.createElement('div');
-            row.className = 'cat-row';
-            row.innerHTML = `
-                <span class="cat-name">${cat}</span>
-                <div class="cat-bar-bg">
-                    <div class="cat-bar-fill" style="width: ${percent.toFixed(0)}%;"></div>
-                </div>
-                <span class="cat-val">${count}</span>
-            `;
-            container.appendChild(row);
-        });
+ window.renderizarChartManutencaoCat = function() {
+    const container = document.getElementById('chart-manutencao-cat');
+    if (!container) return; // Segurança caso o elemento não exista na tela
+    
+    container.innerHTML = '';
+    
+    // --- LINHA NOVA: Proteção para não dar erro de "not defined" ---
+    const dados = window.historicoManutencao || []; 
+    
+    const total = dados.length;
+    if (total === 0) {
+        container.innerHTML = `<div style="text-align:center; color:#ccc; padding:30px;">Sem histórico de manutenção.</div>`;
+        return;
     }
+
+    // --- AJUSTE: Agora usamos a variável "dados" que criamos acima ---
+    const counts = dados.reduce((acc, curr) => {
+        const cat = curr.categoria || 'Outros'; // Proteção caso a categoria esteja vazia
+        acc[cat] = (acc[cat] || 0) + 1;
+        return acc;
+    }, {});
+
+    const sortedCats = Object.entries(counts).sort(([, a], [, b]) => b - a);
+
+    sortedCats.forEach(([cat, count]) => {
+        const percent = (count / total) * 100;
+        const row = document.createElement('div');
+        row.className = 'cat-row';
+        row.innerHTML = `
+            <span class="cat-name">${cat}</span>
+            <div class="cat-bar-bg">
+                <div class="cat-bar-fill" style="width: ${percent.toFixed(0)}%;"></div>
+            </div>
+            <span class="cat-val">${count}</span>
+        `;
+        container.appendChild(row);
+    });
+};
     window.renderizarRankingKm = function() {
         const list = document.getElementById('list-ranking-km');
         list.innerHTML = '';
