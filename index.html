@@ -110,6 +110,50 @@
         .search-bar input { padding-left: 45px; border-radius: 30px; border-color: var(--border); }
         .search-bar i { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); color: var(--accent); }
         @media (max-width: 600px) { table, thead, tbody, th, td, tr { display: block; } thead tr { position: absolute; top: -9999px; left: -9999px; } tr { margin-bottom: 15px; border-radius: 16px; padding: 15px; background: white; box-shadow: var(--shadow-card); border: 1px solid var(--border); } td { border: none; border-bottom: 1px dashed var(--border); position: relative; padding-left: 45%; text-align: right; display: flex; justify-content: space-between; align-items: center; } td:before { content: attr(data-label); font-weight: 800; color: var(--text-sec); font-size: 0.75rem; text-transform: uppercase; } td:last-child { border: none; justify-content: flex-end; padding-top: 15px; } }
+    /* RESOLUÇÃO PARA CELULAR: Transforma a tabela em cartões */
+@media (max-width: 768px) {
+    /* Esconde o cabeçalho (Placa, Condutor...) porque não cabe */
+    #tabela-transito thead { display: none !important; }
+
+    /* Transforma cada linha (TR) em um cartão branco */
+    #tabela-transito tr {
+        display: block;
+        margin-bottom: 15px;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 12px;
+        background: #ffffff;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+
+    /* Organiza as informações uma embaixo da outra */
+    #tabela-transito td {
+        display: flex;
+        justify-content: space-between; /* Nome à esquerda, Dado à direita */
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    /* Coloca o título do dado usando o 'data-label' que vamos por no JS */
+    #tabela-transito td::before {
+        content: attr(data-label);
+        font-weight: bold;
+        color: #64748b;
+        font-size: 12px;
+        text-transform: uppercase;
+    }
+
+    #tabela-transito td:last-child { border-bottom: none; }
+
+    /* Botão de BAIXAR grandão para o polegar */
+    #tabela-transito td button {
+        width: 100%;
+        padding: 12px !important;
+        margin-top: 5px;
+        font-size: 16px;
+    }
+}
     </style>
 </head>
 <body>
@@ -782,23 +826,24 @@ window.registrarEntrada = function() {
         tbRua.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:#94a3b8;">Nenhum veículo na rua.</td></tr>`;
     } else {
         listaTransito.forEach(i => {
-            const diff = new Date() - new Date(i.saida);
-            const tr = document.createElement('tr');
-            
-            // CORREÇÃO: O botão agora chama window.baixaRapida
-            tr.innerHTML = `
-                <td data-label="Placa"><strong>${i.placa}</strong></td>
-                <td data-label="Condutor">${i.condutor}</td>
-                <td data-label="KM">${i.kmSaida}</td>
-                <td data-label="Status">
-                    <span class="badge status-rua" style="background:#fef3c7; color:#b45309">EM TRÂNSITO</span>
-                </td>
-                <td data-label="Saída">${formatarHora(i.saida)}</td>
-                <td data-label="Tempo"><span class="badge-tempo">${calcularTempo(diff)}</span></td>
-                <td data-label="Ação">
-                    <button onclick="window.baixaRapida('${i.placa}')" style="background:var(--success);color:white;border:none;border-radius:8px;padding:6px 12px;cursor:pointer;font-weight:bold;">⬇️ BAIXAR</button>
-                </td>`;
-            tbRua.appendChild(tr);
+         // --- DENTRO DO SEU LOOP LISTATRANSITO.FOREACH ---
+const diff = new Date() - new Date(i.saida); // Calcula o tempo de rua
+const tr = document.createElement('tr');
+
+// O tr.innerHTML que você já tem (com os data-labels para o celular)
+tr.innerHTML = `
+    <td data-label="Placa"><strong>${i.placa}</strong></td>
+    <td data-label="Condutor">${i.condutor}</td>
+    <td data-label="KM">${i.kmSaida}</td>
+    <td data-label="Status"><span class="badge status-rua" style="background:#fef3c7; color:#b45309;">EM TRÂNSITO</span></td>
+    <td data-label="Saída">${window.formatarHora(i.saida)}</td>
+    <td data-label="Tempo"><span class="badge-tempo">${window.calcularTempo(diff)}</span></td>
+    <td data-label="Ação">
+        <button onclick="window.baixaRapida('${i.placa}')" class="btn-baixar-mobile">BAIXAR</button>
+    </td>`;
+
+// MANTENHA ESTA LINHA: Ela insere o item na tela
+tbRua.appendChild(tr);
         });
     }
     
