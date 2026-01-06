@@ -110,6 +110,55 @@
         .search-bar input { padding-left: 45px; border-radius: 30px; border-color: var(--border); }
         .search-bar i { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); color: var(--accent); }
         @media (max-width: 600px) { table, thead, tbody, th, td, tr { display: block; } thead tr { position: absolute; top: -9999px; left: -9999px; } tr { margin-bottom: 15px; border-radius: 16px; padding: 15px; background: white; box-shadow: var(--shadow-card); border: 1px solid var(--border); } td { border: none; border-bottom: 1px dashed var(--border); position: relative; padding-left: 45%; text-align: right; display: flex; justify-content: space-between; align-items: center; } td:before { content: attr(data-label); font-weight: 800; color: var(--text-sec); font-size: 0.75rem; text-transform: uppercase; } td:last-child { border: none; justify-content: flex-end; padding-top: 15px; } }
+    /* Ajuste para visualização em celulares */
+@media (max-width: 768px) {
+    /* Esconde o cabeçalho original da tabela no celular */
+    #tabela-transito thead { display: none !important; }
+
+    /* Transforma cada linha da tabela em um cartão (Card) */
+    #tabela-transito tr {
+        display: block;
+        margin-bottom: 15px;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 12px;
+        background: #ffffff;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+    }
+
+    /* Organiza as colunas como linhas dentro do cartão */
+    #tabela-transito td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 5px;
+        border-bottom: 1px solid #f1f5f9;
+        text-align: right;
+        font-size: 14px;
+        color: #334155;
+    }
+
+    /* Insere o nome da coluna à esquerda usando o data-label */
+    #tabela-transito td::before {
+        content: attr(data-label);
+        font-weight: 700;
+        text-align: left;
+        color: #64748b;
+        text-transform: uppercase;
+        font-size: 11px;
+    }
+
+    /* Remove a linha divisória do último item (botão) */
+    #tabela-transito td:last-child { border-bottom: none; }
+    
+    /* Faz o botão ocupar a largura toda no celular */
+    #tabela-transito td button {
+        width: 100%;
+        margin-top: 5px;
+        padding: 12px !important;
+    }
+}
+    
     </style>
 </head>
 <body>
@@ -364,6 +413,24 @@ window.paginaAtual = 1;
 window.itensPorPagina = 10;
 window.historicoFiltradoCache = [];
 
+// --- FUNÇÃO DE CÁLCULO DE TEMPO ---
+window.calcularTempo = function(ms) {
+    // PROTEÇÃO: Se o valor não for um número ou for negativo, retorna zero
+    if (isNaN(ms) || ms < 0) return "0min"; 
+
+    const totalMinutos = Math.floor(ms / 60000);
+    const horas = Math.floor(totalMinutos / 60);
+    const mins = totalMinutos % 60;
+
+    // Retorna formatado: "2h 30min" ou apenas "30min"
+    if (horas > 0) {
+        return `${horas}h ${mins}min`;
+    } else {
+        return `${mins}min`;
+    }
+};
+
+    
 // Referências globais
 const baseFrotaRef = ref(db, 'baseFrota');
 const emTransitoRef = ref(db, 'emTransito');
@@ -738,12 +805,11 @@ window.registrarEntrada = function() {
         });
     }
 
-   window.atualizarTabelas = function() {
+window.atualizarTabelas = function() {
     const tbRua = document.querySelector('#tabela-transito tbody'); 
     if (!tbRua) return;
     tbRua.innerHTML = '';
     
-    // CORREÇÃO: Usa window.emTransito que vem do Firebase
     const listaTransito = window.emTransito || [];
 
     if(listaTransito.length === 0) {
@@ -752,30 +818,46 @@ window.registrarEntrada = function() {
         listaTransito.forEach(i => {
             const diff = new Date() - new Date(i.saida);
             const tr = document.createElement('tr');
+            // Dentro do seu loop forEach de emTransito:
+    // Calcula a diferença entre AGORA e a hora da SAÍDA salva no Firebase
+    const dataSaida = new Date(i.saida).getTime();
+    const agora = new Date().getTime();
+    const diff = agora - dataSaida;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+        <td data-label="Placa"><strong>${i.placa}</strong></td>
+        <td data-label="Tempo">
+            <span class="badge-tempo" style="background:#edf2f7; padding:4px 8px; border-radius:4px; font-weight:bold;">
+                ${window.calcularTempo(diff)}
+            </span>
+        </td>
+        `;
+    tbRua.appendChild(tr);
+});
             
-            // CORREÇÃO: O botão agora chama window.baixaRapida
+            // IMPORTANTE: Cada <td> agora tem o "data-label" para o celular ler
             tr.innerHTML = `
                 <td data-label="Placa"><strong>${i.placa}</strong></td>
                 <td data-label="Condutor">${i.condutor}</td>
                 <td data-label="KM">${i.kmSaida}</td>
                 <td data-label="Status">
-                    <span class="badge status-rua" style="background:#fef3c7; color:#b45309">EM TRÂNSITO</span>
+                    <span class="badge status-rua" style="background:#fef3c7; color:#b45309; padding:4px 8px; border-radius:6px; font-size:11px;">RUA</span>
                 </td>
                 <td data-label="Saída">${formatarHora(i.saida)}</td>
-                <td data-label="Tempo"><span class="badge-tempo">${calcularTempo(diff)}</span></td>
+                <td data-label="Tempo"><span class="badge-tempo">${window.calcularTempo(diff)}</span></td>
                 <td data-label="Ação">
-                    <button onclick="window.baixaRapida('${i.placa}')" style="background:var(--success);color:white;border:none;border-radius:8px;padding:6px 12px;cursor:pointer;font-weight:bold;">⬇️ BAIXAR</button>
+                    <button onclick="window.baixaRapida('${i.placa}')" style="background:#10b981; color:white; border:none; border-radius:8px; padding:8px 16px; cursor:pointer; font-weight:bold;">⬇️ BAIXAR</button>
                 </td>`;
             tbRua.appendChild(tr);
         });
     }
     
-    // CORREÇÃO: Verifica o papel do usuário usando window
+    // Renderiza as outras partes se for admin
     if(window.currentUserRole === 'admin') {
         if (typeof window.renderizarTabelaManutencao === 'function') window.renderizarTabelaManutencao(); 
         if (typeof window.renderizarHistorico === 'function') window.renderizarHistorico(); 
         if (typeof window.renderizarTabelaGestao === 'function') window.renderizarTabelaGestao(); 
-        if (typeof window.renderizarCategoriasGestao === 'function') window.renderizarCategoriasGestao();
     }
     
     if (typeof window.atualizarIndicadores === 'function') window.atualizarIndicadores();
