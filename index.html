@@ -381,6 +381,30 @@ const historicoRef = ref(db, 'historico');
         atualizarTabelas();
     }
 
+    window.renderizarTabelaManutencao = function() {
+    const tb = document.querySelector('#tabela-manutencao tbody');
+    if (!tb) return;
+    tb.innerHTML = '';
+    
+    // Filtra veículos com revisão próxima (ex: 500km de diferença)
+    const emManutencao = (window.baseFrota || []).filter(v => v.kmRevisao && (v.kmRevisao - v.kmAtual <= 500));
+
+    if (emManutencao.length === 0) {
+        tb.innerHTML = '<tr><td colspan="4" style="text-align:center">Nenhuma manutenção pendente.</td></tr>';
+        return;
+    }
+
+    emManutencao.forEach(v => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${v.placa}</td>
+            <td>${v.modelo}</td>
+            <td>${v.kmAtual} / ${v.kmRevisao}</td>
+            <td><span class="badge status-rua">REVISÃO PRÓXIMA</span></td>
+        `;
+        tb.appendChild(tr);
+    });
+};
 // --- 2. OUVINTE TEMPO REAL ---
 
 // Este bloco substitui o localStorage e atualiza o site sozinho
@@ -490,7 +514,39 @@ window.carregarSelect = function() {
         // -------------------------------------------------------
     }
 };
+window.registrarSaida = function() {
+    const placa = document.getElementById('select-placa').value;
+    const condutor = document.getElementById('input-condutor').value.trim();
+    // KM atual deve vir do display preenchido pela função window.preencherDados
+    const kmSaida = parseInt(document.getElementById('display-km').innerText) || 0;
 
+    if (!placa || !condutor) {
+        return Swal.fire('Erro', 'Selecione um veículo e informe o condutor.', 'error');
+    }
+
+    // Busca dados extras do veículo na base global para levar ao trânsito
+    const veiculo = (window.baseFrota || []).find(v => v.placa === placa);
+
+    const dadosSaida = {
+        placa: placa,
+        modelo: veiculo ? veiculo.modelo : "Não informado",
+        condutor: condutor,
+        kmSaida: kmSaida,
+        saida: new Date().toISOString(),
+        status: 'RUA'
+    };
+
+    // Envia para o Firebase
+    push(ref(db, 'emTransito'), dadosSaida).then(() => {
+        Swal.fire('Sucesso', 'Saída registrada!', 'success');
+        document.getElementById('input-condutor').value = '';
+        // A tabela vai atualizar sozinha pelo onValue
+    }).catch(err => {
+        Swal.fire('Erro', 'Falha ao salvar: ' + err.message, 'error');
+    });
+};
+
+    
 window.registrarEntrada = function() {
     const placa = document.getElementById('select-placa').value;
     if (!placa) return Swal.fire('Erro', 'Selecione uma placa primeiro.', 'error');
