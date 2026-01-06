@@ -213,7 +213,7 @@
 
         <div class="control-panel">
             <div>
-                <div class="form-group"><label>1. Selecione o Veículo</label><select id="select-placa" onchange="preencherDados()"><option value="">-- Toque para selecionar --</option></select></div>
+                <div class="form-group"><label>1. Selecione o Veículo</label><select id="select-placa" onchange="window.preencherDados()"><option value="">-- Toque para selecionar --</option></select></div>
                 <div style="display: flex; gap: 15px;">
                     <div class="form-group" style="flex: 2;"><label>Modelo</label><input type="text" id="input-modelo" class="readonly-field" readonly></div>
                     <div class="form-group" style="flex: 1;"><label>KM Saída</label><input type="number" id="input-km-saida" placeholder="000"></div>
@@ -226,8 +226,8 @@
                 <div class="actions">
                     <button class="btn-action btn-saida" onclick="window.registrarSaida('RUA')"><i class="fa-solid fa-road"></i> SAÍDA</button>
                     <button class="btn-action btn-saida" style="background: linear-gradient(135deg, var(--info), #2563eb);" onclick="window.registrarSaida('OUTROS')"><i class="fa-solid fa-share"></i> OUTROS</button>
-                    <button class="btn-action btn-entrada" onclick="registrarEntrada()"><i class="fa-solid fa-check"></i> BAIXAR</button>
-                    <button class="btn-action btn-manutencao admin-only" onclick="enviarParaManutencao()"><i class="fa-solid fa-screwdriver-wrench"></i> MANUT.</button>
+                    <button class="btn-action btn-entrada" onclick="window.registrarEntrada()"><i class="fa-solid fa-check"></i> BAIXAR</button>
+                    <button class="btn-action btn-manutencao admin-only" onclick="window.enviarParaManutencao()"><i class="fa-solid fa-screwdriver-wrench"></i> MANUT.</button>
                 </div>
             </div>
         </div>
@@ -620,26 +620,45 @@ window.carregarSelect = function() {
         select.appendChild(option);
     });
 };
- window.preencherDados = function() {
+window.preencherDados = function() {
     const placa = document.getElementById('select-placa').value;
-    const veiculo = window.baseFrota.find(v => v.placa === placa);
-    
-    if (veiculo) {
-        document.getElementById('input-modelo').value = veiculo.modelo;
-        document.getElementById('input-km-saida').value = veiculo.kmAtual;
-        
-        // --- MOVA O BLOCO DE REVISÃO PARA CÁ (DENTRO DO IF) ---
-        let statusHTML = 'Aguardando...';
-        let boxColor = '#f8fafc';
+    // Busca o veículo na base global carregada do Firebase
+    const veiculo = (window.baseFrota || []).find(v => v.placa === placa);
 
-        if(veiculo.kmRevisao && veiculo.kmAtual) {
-            const kmRestante = veiculo.kmRevisao - veiculo.kmAtual;
-            if(kmRestante <= 1000 && kmRestante > 0) statusHTML = '⚠️ REVISÃO PRÓXIMA';
-            else if(kmRestante <= 0) statusHTML = '☠️ REVISÃO VENCIDA';
+    if (veiculo) {
+        // Preenche os campos de input
+        document.getElementById('input-modelo').value = veiculo.modelo || "";
+        document.getElementById('input-km-saida').value = veiculo.kmAtual || 0;
+
+        // --- LÓGICA DO STATUS DE REVISÃO ---
+        let statusHTML = '✅ VEÍCULO DISPONÍVEL';
+        let statusColor = '#2563eb'; // Azul padrão
+
+        if (veiculo.kmRevisao && veiculo.kmAtual) {
+            const kmRestante = parseInt(veiculo.kmRevisao) - parseInt(veiculo.kmAtual);
+            
+            if (kmRestante <= 0) {
+                statusHTML = '💀 REVISÃO VENCIDA';
+                statusColor = '#dc2626'; // Vermelho
+            } else if (kmRestante <= 1000) {
+                statusHTML = '⚠️ REVISÃO PRÓXIMA';
+                statusColor = '#f59e0b'; // Amarelo/Laranja
+            }
         }
-        
-        document.getElementById('status-texto').innerHTML = statusHTML;
-        // -------------------------------------------------------
+
+        // Atualiza a interface (Box de Status)
+        const statusTexto = document.getElementById('status-texto');
+        if (statusTexto) {
+            statusTexto.innerHTML = statusHTML;
+            statusTexto.style.color = statusColor;
+        }
+    } else {
+        // Reseta se não houver veículo selecionado
+        document.getElementById('input-modelo').value = '';
+        document.getElementById('input-km-saida').value = '';
+        if (document.getElementById('status-texto')) {
+            document.getElementById('status-texto').innerHTML = 'Aguardando...';
+        }
     }
 };
 window.registrarSaida = function() {
