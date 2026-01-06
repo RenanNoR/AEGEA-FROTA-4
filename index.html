@@ -359,6 +359,23 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const auth = getAuth(app);
+    // --- VIGIA DE LOGIN (onAuthStateChanged) ---
+onAuthStateChanged(auth, (user) => {
+    const loginScreen = document.getElementById('login-screen');
+    const appScreen = document.getElementById('app-screen');
+
+    if (user) {
+        // Usuário logado: Mostra o App, esconde o Login
+        if (loginScreen) loginScreen.style.display = 'none';
+        if (appScreen) appScreen.style.display = 'block';
+        console.log("Usuário conectado:", user.email);
+    } else {
+        // Usuário deslogado: Mostra o Login, esconde o App
+        if (loginScreen) loginScreen.style.display = 'flex';
+        if (appScreen) appScreen.style.display = 'none';
+        console.log("Nenhum usuário conectado. Indo para tela de login.");
+    }
+});
 
     //(Variáveis de Controle) ---
 window.paginaAtual = 1;
@@ -396,7 +413,12 @@ window.renderizarTabelaManutencao = function() {
         tb.appendChild(tr);
     });
 };
-
+window.mostrarInputAdmin = function(role) {
+    const container = document.getElementById('admin-password-container');
+    if (container) {
+        container.style.display = (role === 'admin') ? 'block' : 'none';
+    }
+};
     
         window.mudarAba = function(n) {
         document.querySelectorAll('.tab-content').forEach(x=>x.classList.remove('show')); document.getElementById('aba-'+n).classList.add('show');
