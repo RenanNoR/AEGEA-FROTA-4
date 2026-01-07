@@ -336,8 +336,17 @@
         </div>
         <div class="table-wrapper">
             <table id="tabela-historico">
-                <thead><tr><th>Data</th><th>Placa</th><th>Condutor</th><th>KM Rodados</th><th>Obs</th><th>Foto</th><th class="admin-only">Ação</th></tr></thead>
-                <tbody></tbody>
+              <thead>
+    <tr>
+        <th>Data/Hora</th>
+        <th>Placa</th>
+        <th>Condutor</th>
+        <th>KM Rodados</th>
+        <th>Obs</th>
+        <th>Foto</th>
+        <th class="admin-only">Ação</th>
+    </tr>
+</thead>  
             </table>
         </div>
         <div style="display: flex; justify-content: center; margin-top: 20px; gap: 20px;">
@@ -1003,24 +1012,29 @@ window.baixaRapida = function(placa) {
         const tr = document.createElement('tr');
         // Calcula a quilometragem percorrida na hora para exibir
         const kmRodados = (h.kmChegada && h.kmSaida) ? (h.kmChegada - h.kmSaida) : 0;
-
-        tr.innerHTML = `
-            <td>${new Date(h.chegada || h.saida).toLocaleDateString('pt-BR')}</td>
+tr.innerHTML = `
+            <td>
+                ${new Date(h.chegada).toLocaleDateString('pt-BR')}<br>
+                <small class="text-muted">${new Date(h.saida).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})} às ${new Date(h.chegada).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</small>
+            </td>
             <td><strong>${h.placa}</strong></td>
             <td>${h.condutor}</td>
             <td>${kmRodados} km</td>
-            <td>${h.justificativa || h.obs || '-'}</td>
+            <td>${h.obs || '-'}</td>
             
             <td style="text-align:center">
                 ${h.fotoComprovante 
-                    ? `<button onclick="window.open('${h.fotoComprovante}', '_blank')" style="background:var(--info); color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer"><i class="fa-solid fa-camera"></i> Ver</button>` 
+                    ? `<button onclick="window.open('${h.fotoComprovante}', '_blank')" style="background:#003087; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer"><i class="fa-solid fa-camera"></i> Ver</button>` 
                     : '<span style="color:#ccc">---</span>'}
             </td>
 
-            <td class="admin-only">
-                <button onclick="window.apagarHistorico('${h.firebaseKey}')" style="background:none; border:none; color:var(--danger); cursor:pointer"><i class="fa-solid fa-trash"></i></button>
+            <td class="admin-only" style="text-align:center">
+                <button onclick="window.apagarHistorico('${h.firebaseKey}')" style="background:none; border:none; color:#ef4444; cursor:pointer;">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
             </td>
         `;
+  
         tb.appendChild(tr);
     });
 };
@@ -1433,25 +1447,35 @@ window.renderizarTabelaGestao = function() {
         r.readAsText(i.files[0]); 
     }
 window.exportarExcel = function() {
-    // Teste de segurança: verifica se o motor do Excel existe
-    if (typeof XLSX === 'undefined') {
-        Swal.fire('Erro', 'O motor de exportação (XLSX) não carregou. Verifique sua conexão ou a posição do script no HTML.', 'error');
-        return;
-    }
-
-    const tabela = document.getElementById('tabela-historico');
-    
-    if (!tabela || tabela.rows.length <= 1) {
-        Swal.fire('Aviso', 'Não há dados na tabela para exportar.', 'warning');
-        return;
-    }
-
     try {
-        const wb = XLSX.utils.table_to_book(tabela, { sheet: "Historico" });
-        XLSX.writeFile(wb, "Relatorio_Frota_Aegea.xlsx");
-        console.log("Exportação realizada!");
-    } catch (error) {
-        console.error("Erro interno:", error);
+        // Criamos os dados começando pelo cabeçalho
+        const dadosParaExcel = [
+            ["Data", "Hora Saída", "Hora Chegada", "Placa", "Condutor", "KM Saída", "KM Chegada", "KM Rodados", "Observação"]
+        ];
+
+        // Populamos com o histórico que está na memória (window.historico)
+        window.historico.forEach(h => {
+            dadosParaExcel.push([
+                new Date(h.chegada).toLocaleDateString('pt-BR'),
+                new Date(h.saida).toLocaleTimeString('pt-BR'),
+                new Date(h.chegada).toLocaleTimeString('pt-BR'),
+                h.placa,
+                h.condutor,
+                h.kmSaida,
+                h.kmChegada,
+                (h.kmChegada - h.kmSaida),
+                h.obs || ""
+            ]);
+        });
+
+        const ws = XLSX.utils.aoa_to_sheet(dadosParaExcel);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Histórico");
+        
+        XLSX.writeFile(wb, `Relatorio_Frota_${new Date().toLocaleDateString()}.xlsx`);
+    } catch (e) {
+        console.error("Erro ao exportar:", e);
+        Swal.fire('Erro', 'Não foi possível gerar o Excel: ' + e.message, 'error');
     }
 };
     // NO FINAL DO ARQUIVO:
