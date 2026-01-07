@@ -1005,37 +1005,45 @@ window.baixaRapida = function(placa) {
     if (!tb) return;
     tb.innerHTML = '';
 
-    // Pegamos a lista da nuvem e usamos o reverse() para os novos aparecerem no topo
+    // Filtra apenas registros válidos e inverte a ordem (mais novos primeiro)
     const lista = [...(window.historico || [])].reverse();
 
     lista.forEach(h => {
-        const tr = document.createElement('tr');
-        // Calcula a quilometragem percorrida na hora para exibir
-        const kmRodados = (h.kmChegada && h.kmSaida) ? (h.kmChegada - h.kmSaida) : 0;
-tr.innerHTML = `
-            <td>
-                ${new Date(h.chegada).toLocaleDateString('pt-BR')}<br>
-                <small class="text-muted">${new Date(h.saida).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})} às ${new Date(h.chegada).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}</small>
-            </td>
-            <td><strong>${h.placa}</strong></td>
-            <td>${h.condutor}</td>
-            <td>${kmRodados} km</td>
-            <td>${h.obs || '-'}</td>
+        try {
+            const tr = document.createElement('tr');
+            const kmRodados = (h.kmChegada && h.kmSaida) ? (h.kmChegada - h.kmSaida) : 0;
             
-            <td style="text-align:center">
-                ${h.fotoComprovante 
-                    ? `<button onclick="window.open('${h.fotoComprovante}', '_blank')" style="background:#003087; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer"><i class="fa-solid fa-camera"></i> Ver</button>` 
-                    : '<span style="color:#ccc">---</span>'}
-            </td>
+            // Formatação segura de datas
+            const dataDoc = h.chegada ? new Date(h.chegada).toLocaleDateString('pt-BR') : '---';
+            const horaSaida = h.saida ? new Date(h.saida).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : '--:--';
+            const horaChegada = h.chegada ? new Date(h.chegada).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : '--:--';
 
-            <td class="admin-only" style="text-align:center">
-                <button onclick="window.apagarHistorico('${h.firebaseKey}')" style="background:none; border:none; color:#ef4444; cursor:pointer;">
-                    <i class="fa-solid fa-trash"></i>
-                </button>
-            </td>
-        `;
-  
-        tb.appendChild(tr);
+            tr.innerHTML = `
+                <td>
+                    <strong>${dataDoc}</strong><br>
+                    <small style="color: #64748b;">${horaSaida} às ${horaChegada}</small>
+                </td>
+                <td><strong>${h.placa || '---'}</strong></td>
+                <td>${h.condutor || '---'}</td>
+                <td>${kmRodados} km</td>
+                <td>${h.obs || h.justificativa || '-'}</td>
+                
+                <td style="text-align:center">
+                    ${h.fotoComprovante 
+                        ? `<button onclick="window.open('${h.fotoComprovante}', '_blank')" style="background:#003087; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer"><i class="fa-solid fa-camera"></i> Ver</button>` 
+                        : '<span style="color:#ccc">---</span>'}
+                </td>
+
+                <td class="admin-only" style="text-align:center">
+                    <button onclick="window.apagarHistorico('${h.firebaseKey}')" style="background:none; border:none; color:#ef4444; cursor:pointer;">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tb.appendChild(tr);
+        } catch (err) {
+            console.error("Erro ao renderizar linha do histórico:", err, h);
+        }
     });
 };
     // FUNÇÕES DE DASHBOARD
