@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>SGF - Sistema de Gestão de Frota (Aegea v12.1 Bug Fix)</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     
     <link href="https://cdn.jsdelivr.net/npm/@sweetalert2/theme-material-ui/material-ui.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -1409,25 +1410,25 @@ window.renderizarTabelaGestao = function() {
         r.readAsText(i.files[0]); 
     }
 window.exportarExcel = function() {
-    // 1. Pega a tabela de histórico (ID deve ser o mesmo do seu HTML)
-    const tabela = document.getElementById('tabela-historico');
-    
-    if (!tabela || tabela.rows.length <= 1) {
-        Swal.fire('Aviso', 'Não há dados visíveis na tabela para exportar.', 'warning');
+    // Teste de segurança: verifica se o motor do Excel existe
+    if (typeof XLSX === 'undefined') {
+        Swal.fire('Erro', 'O motor de exportação (XLSX) não carregou. Verifique sua conexão ou a posição do script no HTML.', 'error');
         return;
     }
 
-    // 2. Transforma a tabela HTML diretamente em um objeto do Excel
+    const tabela = document.getElementById('tabela-historico');
+    
+    if (!tabela || tabela.rows.length <= 1) {
+        Swal.fire('Aviso', 'Não há dados na tabela para exportar.', 'warning');
+        return;
+    }
+
     try {
         const wb = XLSX.utils.table_to_book(tabela, { sheet: "Historico" });
-        
-        // 3. Salva o arquivo
         XLSX.writeFile(wb, "Relatorio_Frota_Aegea.xlsx");
-        
-        console.log("Exportação concluída!");
+        console.log("Exportação realizada!");
     } catch (error) {
-        console.error("Erro ao exportar:", error);
-        Swal.fire('Erro', 'A biblioteca de Excel ainda não carregou. Tente novamente em instantes.', 'error');
+        console.error("Erro interno:", error);
     }
 };
     // NO FINAL DO ARQUIVO:
