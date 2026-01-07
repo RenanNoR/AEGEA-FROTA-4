@@ -154,6 +154,7 @@
         font-size: 16px;
     }
 }
+        <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     </style>
 </head>
 <body>
@@ -1408,53 +1409,25 @@ window.renderizarTabelaGestao = function() {
         r.readAsText(i.files[0]); 
     }
 window.exportarExcel = function() {
-    // 1. Procura a tabela pelo ID (Verifica se o ID da tua tabela é 'tabela-historico')
-    const tabela = document.getElementById('tabela-historico'); 
+    // 1. Pega a tabela de histórico (ID deve ser o mesmo do seu HTML)
+    const tabela = document.getElementById('tabela-historico');
     
-    if (!tabela) {
-        console.error("Tabela não encontrada!");
-        Swal.fire('Erro', 'Tabela de histórico não encontrada no código.', 'error');
+    if (!tabela || tabela.rows.length <= 1) {
+        Swal.fire('Aviso', 'Não há dados visíveis na tabela para exportar.', 'warning');
         return;
     }
 
-    const linhas = tabela.querySelectorAll('tr');
-    
-    // Verifica se a tabela tem dados (mais do que apenas o cabeçalho)
-    if (linhas.length <= 1) {
-        Swal.fire('Aviso', 'Não existem dados na tabela para exportar.', 'warning');
-        return;
-    }
-
-    const dadosParaExportar = [];
-
-    // 2. Percorre as linhas da tabela (começa em 1 para saltar o cabeçalho)
-    for (let i = 1; i < linhas.length; i++) {
-        const colunas = linhas[i].querySelectorAll('td');
-        
-        // Só adiciona se a linha tiver colunas (evita linhas vazias)
-        if (colunas.length >= 4) {
-            dadosParaExportar.push({
-                "Data/Hora": colunas[0].innerText.trim(),
-                "Placa": colunas[1].innerText.trim(),
-                "Condutor": colunas[2].innerText.trim(),
-                "KM Rodados": colunas[3].innerText.trim(),
-                "Observação": colunas[4] ? colunas[4].innerText.trim() : ""
-            });
-        }
-    }
-
-    // 3. Gera o ficheiro Excel
+    // 2. Transforma a tabela HTML diretamente em um objeto do Excel
     try {
-        const worksheet = XLSX.utils.json_to_sheet(dadosParaExportar);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Historico_Frota");
+        const wb = XLSX.utils.table_to_book(tabela, { sheet: "Historico" });
         
-        // Gera o download imediato
-        XLSX.writeFile(workbook, `Relatorio_Frota_Aegea.xlsx`);
-        console.log("Exportação concluída com sucesso.");
+        // 3. Salva o arquivo
+        XLSX.writeFile(wb, "Relatorio_Frota_Aegea.xlsx");
+        
+        console.log("Exportação concluída!");
     } catch (error) {
-        console.error("Erro ao gerar Excel:", error);
-        Swal.fire('Erro', 'Falha ao criar o ficheiro Excel. Verifique se a biblioteca XLSX está carregada.', 'error');
+        console.error("Erro ao exportar:", error);
+        Swal.fire('Erro', 'A biblioteca de Excel ainda não carregou. Tente novamente em instantes.', 'error');
     }
 };
     // NO FINAL DO ARQUIVO:
