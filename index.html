@@ -165,9 +165,9 @@
         <img src="logo.png" alt="Aegea" style="height: 70px; margin-bottom: 25px;" onerror="this.style.display='none'">
         <h1 style="color:var(--primary); font-size: 1.5rem; margin-bottom: 5px;">SGF AEGEA</h1>
         <p style="color: var(--text-sec); margin-bottom: 30px; font-size: 0.9rem;">Sistema de Gestão de Frota</p>
-        <button class="login-btn" style="background: var(--accent); color: white; box-shadow: 0 8px 20px -5px rgba(0, 176, 185, 0.4);" onclick="login('motorista')"><i class="fa-solid fa-steering-wheel"></i> ACESSO MOTORISTA</button>
+        <button class="login-btn" style="background: var(--accent); color: white; box-shadow: 0 8px 20px -5px rgba(0, 176, 185, 0.4);" onclick="window.login('motorista')"><i class="fa-solid fa-steering-wheel"></i> ACESSO MOTORISTA</button>
         <div style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
-            <button class="login-btn" style="background: white; border: 2px solid var(--primary); color: var(--primary);" onclick="mostrarInputAdmin()"><i class="fa-solid fa-lock"></i> ÁREA ADMINISTRATIVA</button>
+            <button class="login-btn" style="background: white; border: 2px solid var(--primary); color: var(--primary);" onclick="window.mostrarInputAdmin()"><i class="fa-solid fa-lock"></i> ÁREA ADMINISTRATIVA</button>
             <input type="password" id="admin-pass" style="margin-top: 15px; display: none;" placeholder="Senha do Admin" onkeyup="checkAdminPass(event)">
         </div>
     </div>
