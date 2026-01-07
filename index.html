@@ -1432,6 +1432,7 @@ window.exportarExcel = function() {
             "Obs": i.justificativa || i.obs || "-"
         };
     });
+}
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
