@@ -222,6 +222,11 @@
                 </div>
                 <div class="form-group"><label>Condutor / Destino</label><input type="text" id="input-condutor" placeholder="Nome do condutor"></div>
                 <div class="form-group"><label>Justificativa</label><input type="text" id="input-justificativa" placeholder="Opcional..."></div>
+                <div class="form-group">
+    <label>📸 Foto da Entrega da Chave (Portaria)</label>
+    <input type="file" id="foto-chave" accept="image/*" capture="camera" onchange="processarFoto(this)">
+    <img id="preview-foto" style="display:none; width: 100px; margin-top: 10px; border-radius: 8px; border: 2px solid var(--accent);">
+</div>
             </div>
             <div style="display: flex; flex-direction: column; justify-content: center;">
                 <div id="status-box" style="text-align: center; margin-bottom: 20px; padding: 30px; border-radius: 20px; background: #f8fafc; border: 2px dashed var(--border);"><span style="color: var(--text-sec); font-size: 0.8rem; text-transform: uppercase; font-weight: 800; letter-spacing: 1px;">Status Atual</span><br><strong id="status-texto" style="font-size: 1.4rem; color: var(--primary);">Aguardando...</strong></div>
@@ -331,7 +336,7 @@
         </div>
         <div class="table-wrapper">
             <table id="tabela-historico">
-                <thead><tr><th>Data</th><th>Placa</th><th>Condutor</th><th>KM Rodados</th><th>Obs</th><th class="admin-only">Ação</th></tr></thead>
+                <thead><tr><th>Data</th><th>Placa</th><th>Condutor</th><th>KM Rodados</th><th>Obs</th><th>Foto</th><th class="admin-only">Ação</th></tr></thead>
                 <tbody></tbody>
             </table>
         </div>
@@ -732,6 +737,11 @@ window.registrarEntrada = function() {
     const item = window.emTransito.find(x => x.placa === placa);
     if(!item) return Swal.fire('Erro', 'Este veículo não está em trânsito no banco de dados.', 'error');
 
+    // VERIFICAÇÃO DE FOTO: Garante que a foto foi tirada antes de abrir o KM
+    if (typeof fotoBase64 === 'undefined' || !fotoBase64) {
+        return Swal.fire('Atenção', 'Por favor, tire a foto da entrega da chave antes de dar baixa.', 'warning');
+    }
+
     Swal.fire({
         title: 'KM de Chegada',
         input: 'number',
@@ -743,7 +753,7 @@ window.registrarEntrada = function() {
         if(res.isConfirmed && res.value) {
             const kmChegada = parseInt(res.value);
             
-            // 1. Criar o objeto de histórico
+            // 1. Criar o objeto de histórico (INCLUINDO A FOTO)
             const dadosFinal = {
                 placa: item.placa,
                 modelo: item.modelo || "Não informado",
@@ -752,7 +762,8 @@ window.registrarEntrada = function() {
                 kmChegada: kmChegada,
                 kmRodados: kmChegada - item.kmSaida,
                 saida: item.saida,
-                chegada: new Date().toISOString()
+                chegada: new Date().toISOString(),
+                fotoComprovante: fotoBase64 // <-- A foto entra aqui como texto
             };
 
             const chaveParaDeletar = item.firebaseKey;
@@ -761,18 +772,25 @@ window.registrarEntrada = function() {
             push(ref(db, 'historico'), dadosFinal).then(() => {
                 
                 // 3. SEGUNDO: Atualiza o KM na Base da Frota
-                // Usando a lógica de busca por chave que evita o "undefined"
                 const veiculoFirebase = Object.entries(window.rawBaseFrotaData || {}).find(([key, val]) => val.placa === placa);
                 
                 if (veiculoFirebase) {
-                    // Atualiza o KM real no Firebase
                     set(ref(db, `baseFrota/${veiculoFirebase[0]}/kmAtual`), kmChegada);
                 }
 
                 // 4. TERCEIRO: Só agora remove do Trânsito
                 remove(ref(db, `emTransito/${chaveParaDeletar}`));
 
-                Swal.fire('Sucesso', 'Baixa realizada com sucesso!', 'success');
+                Swal.fire('Sucesso', 'Baixa realizada com foto registrada!', 'success');
+                
+                // --- LIMPEZA APÓS SUCESSO ---
+                fotoBase64 = ""; // Reseta a variável da foto
+                if(document.getElementById('preview-foto')) {
+                    document.getElementById('preview-foto').style.display = 'none'; // Esconde a miniatura
+                }
+                if(document.getElementById('foto-chave')) {
+                    document.getElementById('foto-chave').value = ""; // Limpa o campo de arquivo
+                }
                 if(window.limparForm) window.limparForm();
                 
             }).catch(error => {
@@ -984,23 +1002,28 @@ window.baixaRapida = function(placa) {
     lista.forEach(h => {
         const tr = document.createElement('tr');
         // Calcula a quilometragem percorrida na hora para exibir
-        const kmRodados = h.kmChegada - h.kmSaida;
+        const kmRodados = (h.kmChegada && h.kmSaida) ? (h.kmChegada - h.kmSaida) : 0;
 
         tr.innerHTML = `
-            <td>${h.placa}</td>
+            <td>${new Date(h.chegada || h.saida).toLocaleDateString('pt-BR')}</td>
+            <td><strong>${h.placa}</strong></td>
             <td>${h.condutor}</td>
-            <td>${h.kmSaida} → ${h.kmChegada} <br><small>(${kmRodados} km)</small></td>
-            <td>
-                <span style="font-size:0.8rem;">
-                    Saída: ${new Date(h.saida).toLocaleString('pt-BR')} <br>
-                    Chegada: ${new Date(h.chegada).toLocaleString('pt-BR')}
-                </span>
+            <td>${kmRodados} km</td>
+            <td>${h.justificativa || h.obs || '-'}</td>
+            
+            <td style="text-align:center">
+                ${h.fotoComprovante 
+                    ? `<button onclick="window.open('${h.fotoComprovante}', '_blank')" style="background:var(--info); color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer"><i class="fa-solid fa-camera"></i> Ver</button>` 
+                    : '<span style="color:#ccc">---</span>'}
+            </td>
+
+            <td class="admin-only">
+                <button onclick="window.apagarHistorico('${h.firebaseKey}')" style="background:none; border:none; color:var(--danger); cursor:pointer"><i class="fa-solid fa-trash"></i></button>
             </td>
         `;
         tb.appendChild(tr);
     });
 };
-    
     // FUNÇÕES DE DASHBOARD
     window.atualizarDashboard = function() {
         if(currentUserRole !== 'admin') return;
@@ -1450,6 +1473,33 @@ window.fazerLogout = function() {
         firebaseSignOut(getAuth()).then(() => window.location.reload());
     }
 };
+    let fotoBase64 = ""; // Variável global para armazenar a imagem
+
+window.processarFoto = function(input) {
+    const file = input.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.src = e.target.result;
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                // Redimensiona para não pesar no banco de dados
+                const MAX_WIDTH = 400; 
+                const scaleSize = MAX_WIDTH / img.width;
+                canvas.width = MAX_WIDTH;
+                canvas.height = img.height * scaleSize;
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                
+                fotoBase64 = canvas.toDataURL('image/jpeg', 0.6);
+                document.getElementById('preview-foto').src = fotoBase64;
+                document.getElementById('preview-foto').style.display = 'block';
+            }
+        }
+        reader.readAsDataURL(file);
+    }
+}
 </script>
 </body>
 </html>  
