@@ -1408,52 +1408,53 @@ window.renderizarTabelaGestao = function() {
         r.readAsText(i.files[0]); 
     }
 window.exportarExcel = function() {
-    // 1. Tenta pegar os dados filtrados, se não houver, pega o histórico geral
-    let dados = window.historicoFiltrado || window.historicoManutencao || [];
-
-    // 2. Se as variáveis estiverem vazias, vamos tentar ler direto das linhas da tabela na tela
-    if (dados.length === 0) {
-        const linhas = document.querySelectorAll('#tabela-historico tr'); // Ajuste o ID se for outro
-        if (linhas.length > 1) { // > 1 para ignorar o cabeçalho
-            console.log("Lendo dados direto da tabela HTML...");
-            // Lógica extra de emergência caso as variáveis globais falhem
-        }
-    }
-
-    if (dados.length === 0) {
-        Swal.fire('Aviso', 'Não há dados carregados para exportar. Tente filtrar o histórico primeiro.', 'warning');
+    // 1. Procura a tabela pelo ID (Verifica se o ID da tua tabela é 'tabela-historico')
+    const tabela = document.getElementById('tabela-historico'); 
+    
+    if (!tabela) {
+        console.error("Tabela não encontrada!");
+        Swal.fire('Erro', 'Tabela de histórico não encontrada no código.', 'error');
         return;
     }
 
-    // 3. MAPEAMENTO SEGURO (Resolve o problema do undefined da imagem image_7cb087.png)
-    const rows = dados.map(i => {
-        // Garantir que números sejam tratados como números
-        const kmS = parseInt(i.kmSaida) || 0;
-        const kmF = parseInt(i.kmFinal || i.kmRetorno) || 0;
-        const rodado = (kmF > 0 && kmF >= kmS) ? (kmF - kmS) : 0;
+    const linhas = tabela.querySelectorAll('tr');
+    
+    // Verifica se a tabela tem dados (mais do que apenas o cabeçalho)
+    if (linhas.length <= 1) {
+        Swal.fire('Aviso', 'Não existem dados na tabela para exportar.', 'warning');
+        return;
+    }
 
-        return {
-            "Data Saída": i.saida ? new Date(i.saida).toLocaleDateString('pt-BR') : (i.data || "---"),
-            "Placa": i.placa || "---",
-            "Condutor": i.condutor || "---",
-            "KM Saída": kmS,
-            "KM Retorno": kmF > 0 ? kmF : "---",
-            "KM Rodados": rodado,
-            "Tempo": i.saida && (i.retorno || i.dataFim) ? window.calcularTempo(new Date(i.retorno || i.dataFim) - new Date(i.saida)) : "---",
-            "Observação": i.justificativa || i.obs || "-"
-        };
-    });
+    const dadosParaExportar = [];
 
+    // 2. Percorre as linhas da tabela (começa em 1 para saltar o cabeçalho)
+    for (let i = 1; i < linhas.length; i++) {
+        const colunas = linhas[i].querySelectorAll('td');
+        
+        // Só adiciona se a linha tiver colunas (evita linhas vazias)
+        if (colunas.length >= 4) {
+            dadosParaExportar.push({
+                "Data/Hora": colunas[0].innerText.trim(),
+                "Placa": colunas[1].innerText.trim(),
+                "Condutor": colunas[2].innerText.trim(),
+                "KM Rodados": colunas[3].innerText.trim(),
+                "Observação": colunas[4] ? colunas[4].innerText.trim() : ""
+            });
+        }
+    }
+
+    // 3. Gera o ficheiro Excel
     try {
-        const worksheet = XLSX.utils.json_to_sheet(rows);
+        const worksheet = XLSX.utils.json_to_sheet(dadosParaExportar);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, "Historico_Frota");
         
-        // Gera o download
-        XLSX.writeFile(workbook, `Relatorio_Aegea_${new Date().getTime()}.xlsx`);
+        // Gera o download imediato
+        XLSX.writeFile(workbook, `Relatorio_Frota_Aegea.xlsx`);
+        console.log("Exportação concluída com sucesso.");
     } catch (error) {
         console.error("Erro ao gerar Excel:", error);
-        alert("Erro técnico ao gerar o arquivo. Verifique o console (F12).");
+        Swal.fire('Erro', 'Falha ao criar o ficheiro Excel. Verifique se a biblioteca XLSX está carregada.', 'error');
     }
 };
     // NO FINAL DO ARQUIVO:
