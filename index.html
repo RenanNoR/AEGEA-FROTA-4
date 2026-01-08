@@ -335,20 +335,21 @@
             <button class="btn-action" style="background: var(--success); padding: 10px 20px; font-size: 0.8rem;" onclick="window.exportarExcel()"><i class="fa-solid fa-file-csv"></i></button>
         </div>
         <div class="table-wrapper">
-            <table id="tabela-historico">
-              <thead>
-    <tr>
-        <th>Data/Hora</th>
-        <th>Placa</th>
-        <th>Condutor</th>
-        <th>KM Rodados</th>
-        <th>Obs</th>
-        <th>Foto</th>
-        <th class="admin-only">Ação</th>
-    </tr>
-</thead>  
-            </table>
-        </div>
+    <table id="tabela-historico">
+        <thead>
+            <tr>
+                <th>Data/Hora</th>
+                <th>Placa</th>
+                <th>Condutor</th>
+                <th>KM Rodados</th>
+                <th>Obs</th>
+                <th>Foto</th>
+                <th class="admin-only">Ação</th>
+            </tr>
+        </thead>
+        <tbody></tbody> 
+    </table>
+</div>
         <div style="display: flex; justify-content: center; margin-top: 20px; gap: 20px;">
             <button class="tab-btn" style="width:50px; flex-grow:0" onclick="mudarPagina(-1)"><i class="fa-solid fa-chevron-left"></i></button>
             <span id="page-info" style="font-weight: 700; color: var(--text-sec);">Página 1</span>
@@ -1209,62 +1210,100 @@ window.atualizarIndicadores = function() {
 
 window.renderizarHistorico = function() {
     const tb = document.querySelector('#tabela-historico tbody'); 
-    if (!tb) return;
+    
+    // Verificação se o tbody existe (o erro que identificamos antes)
+    if (!tb) {
+        console.error("ERRO: Elemento tbody não encontrado dentro de #tabela-historico");
+        return;
+    }
+    
     tb.innerHTML = '';
     
-    // CORREÇÃO: Garante que as variáveis de paginação existam
-    const start = ((window.paginaAtual || 1) - 1) * (window.itensPorPagina || 10);
-    const end = start + (window.itensPorPagina || 10);
+    // Fallback para variáveis de paginação
+    if (!window.paginaAtual) window.paginaAtual = 1;
+    if (!window.itensPorPagina) window.itensPorPagina = 10;
     
-    // Define qual lista usar (filtrada ou total)
-    let itens = (window.historicoFiltradoCache && window.historicoFiltradoCache.length > 0) 
+    const start = (window.paginaAtual - 1) * window.itensPorPagina;
+    const end = start + window.itensPorPagina;
+    
+    // Lógica de seleção de dados:
+    // Se houve uma tentativa de filtragem (mesmo que vazia), usamos o cache do filtro.
+    // O 'undefined' checa se o filtro já foi rodado ao menos uma vez.
+    let itens = (window.historicoFiltradoCache !== undefined) 
                 ? window.historicoFiltradoCache 
                 : (window.historico || []);
 
-    // Ordena para mostrar os mais recentes primeiro
+    // Ordenação por data (mais recente primeiro)
     itens = [...itens].sort((a, b) => new Date(b.saida) - new Date(a.saida));
 
     const paginaItens = itens.slice(start, end);
-    const totalPaginas = Math.ceil(itens.length / (window.itensPorPagina || 10));
+    const totalPaginas = Math.ceil(itens.length / window.itensPorPagina);
 
+    // Atualiza o contador de página na tela
     const pageInfo = document.getElementById('page-info');
     if (pageInfo) {
-        pageInfo.innerText = `Página ${window.paginaAtual || 1} de ${totalPaginas === 0 ? 1 : totalPaginas}`;
+        pageInfo.innerText = `Página ${window.paginaAtual} de ${totalPaginas === 0 ? 1 : totalPaginas}`;
     }
 
-    if(paginaItens.length === 0) {
-        tb.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:#94a3b8;">Nenhum registro encontrado.</td></tr>`;
+    // Se a lista estiver vazia (seja filtro ou histórico geral)
+    if (paginaItens.length === 0) {
+        tb.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:#94a3b8;">Nenhum registro encontrado.</td></tr>`;
         return;
     }
 
+    // Renderização das linhas
     paginaItens.forEach(i => {
         const tr = document.createElement('tr');
+        
+        // Formatação amigável das datas e KM
+        const dataFormatada = i.saida ? new Date(i.saida).toLocaleDateString('pt-BR') : '---';
+        const kmExibicao = (i.kmChegada && i.kmSaida) ? (i.kmChegada - i.kmSaida) : (i.kmRodados || 0);
+
         tr.innerHTML = `
-            <td data-label="Data"><strong>${new Date(i.saida).toLocaleDateString()}</strong></td>
-            <td data-label="Placa">${i.placa}</td>
-            <td data-label="Condutor">${i.condutor}</td>
-            <td data-label="KM Rodados">${i.kmRodados || 0} km</td>
-            <td data-label="Obs">${i.justificativa || i.status || '-'}</td>
-            <td data-label="Ação" class="admin-only">
-                <button onclick="window.deletarHistorico('${i.placa}', '${i.saida}')" style="color:var(--danger);background:none;border:none;cursor:pointer">
+            <td data-label="Data"><strong>${dataFormatada}</strong></td>
+            <td data-label="Placa"><strong>${i.placa || '---'}</strong></td>
+            <td data-label="Condutor">${i.condutor || '---'}</td>
+            <td data-label="KM Rodados">${kmExibicao} km</td>
+            <td data-label="Obs">${i.justificativa || i.obs || i.status || '-'}</td>
+            <td data-label="Foto" style="text-align:center">
+                ${i.fotoComprovante 
+                    ? `<button onclick="window.open('${i.fotoComprovante}', '_blank')" style="background:#003087; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer"><i class="fa-solid fa-camera"></i> Ver</button>` 
+                    : '<span style="color:#ccc">---</span>'}
+            </td>
+            <td data-label="Ação" class="admin-only" style="text-align:center">
+                <button onclick="window.deletarHistorico('${i.firebaseKey || ''}')" style="color:#ef4444; background:none; border:none; cursor:pointer; font-size:1.1rem">
                     <i class="fa-solid fa-trash"></i>
                 </button>
             </td>
         `;
         tb.appendChild(tr);
     });
-}
+};
 
-    window.mudarPagina = function(delta) {
-        const itens = historicoFiltradoCache.length > 0 ? historicoFiltradoCache : historico;
-        const totalPaginas = Math.ceil(itens.length / itensPorPagina);
-        const novaPagina = paginaAtual + delta;
+ window.mudarPagina = function(delta) {
+    // 1. Garante o uso das variáveis globais
+    const hTotal = window.historico || [];
+    const hFiltrado = window.historicoFiltradoCache;
+    const porPagina = window.itensPorPagina || 10;
+    
+    // 2. Decide qual lista usar (Se o filtro foi acionado, usa o filtrado mesmo que vazio)
+    const itens = (hFiltrado !== undefined) ? hFiltrado : hTotal;
+    
+    // 3. Cálculo do total de páginas
+    const totalPaginas = Math.ceil(itens.length / porPagina) || 1;
+    
+    // 4. Cálculo da nova página com limites
+    const novaPagina = (window.paginaAtual || 1) + delta;
 
-        if (novaPagina >= 1 && novaPagina <= totalPaginas) {
-            paginaAtual = novaPagina;
-            renderizarHistorico();
-        }
+    if (novaPagina >= 1 && novaPagina <= totalPaginas) {
+        window.paginaAtual = novaPagina;
+        window.renderizarHistorico();
+        
+        // Feedback visual: rola para o topo da tabela ao mudar de página
+        const tabela = document.getElementById('tabela-historico');
+        if(tabela) tabela.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+};
     
     window.deletarHistorico = function(placa, saida) {
         Swal.fire({
@@ -1456,31 +1495,61 @@ window.renderizarTabelaGestao = function() {
     }
 window.exportarExcel = function() {
     try {
-        // Criamos os dados começando pelo cabeçalho
+        // 1. Decidir quais dados exportar (respeita o filtro atual)
+        const listaParaExportar = (window.historicoFiltradoCache !== undefined) 
+                                  ? window.historicoFiltradoCache 
+                                  : (window.historico || []);
+
+        if (listaParaExportar.length === 0) {
+            Swal.fire('Aviso', 'Não há dados para exportar com os filtros atuais.', 'warning');
+            return;
+        }
+
+        // 2. Cabeçalho do Excel
         const dadosParaExcel = [
             ["Data", "Hora Saída", "Hora Chegada", "Placa", "Condutor", "KM Saída", "KM Chegada", "KM Rodados", "Observação"]
         ];
 
-        // Populamos com o histórico que está na memória (window.historico)
-        window.historico.forEach(h => {
+        // 3. Popular os dados com tratamento de erros
+        listaParaExportar.forEach(h => {
+            // Tratamento de datas para evitar "Invalid Date"
+            const dataDoc = h.saida ? new Date(h.saida).toLocaleDateString('pt-BR') : '---';
+            const hSaida = h.saida ? new Date(h.saida).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '---';
+            const hChegada = h.chegada ? new Date(h.chegada).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '---';
+            
+            // Cálculo de KM garantindo que sejam números
+            const kS = Number(h.kmSaida) || 0;
+            const kC = Number(h.kmChegada) || 0;
+            const kR = kC > 0 ? (kC - kS) : 0;
+
             dadosParaExcel.push([
-                new Date(h.chegada).toLocaleDateString('pt-BR'),
-                new Date(h.saida).toLocaleTimeString('pt-BR'),
-                new Date(h.chegada).toLocaleTimeString('pt-BR'),
-                h.placa,
-                h.condutor,
-                h.kmSaida,
-                h.kmChegada,
-                (h.kmChegada - h.kmSaida),
-                h.obs || ""
+                dataDoc,
+                hSaida,
+                hChegada,
+                h.placa || "---",
+                h.condutor || "---",
+                kS,
+                kC,
+                kR,
+                h.justificativa || h.obs || ""
             ]);
         });
 
+        // 4. Gerar e baixar o arquivo
         const ws = XLSX.utils.aoa_to_sheet(dadosParaExcel);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Histórico");
         
-        XLSX.writeFile(wb, `Relatorio_Frota_${new Date().toLocaleDateString()}.xlsx`);
+        // Ajustar largura das colunas automaticamente para o Excel ficar bonito
+        const wscols = [
+            {wch: 12}, {wch: 12}, {wch: 12}, {wch: 10}, {wch: 25}, {wch: 10}, {wch: 10}, {wch: 12}, {wch: 30}
+        ];
+        ws['!cols'] = wscols;
+
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Histórico Filtrado");
+        
+        const nomeArquivo = `Relatorio_Frota_${new Date().toISOString().split('T')[0]}.xlsx`;
+        XLSX.writeFile(wb, nomeArquivo);
+
     } catch (e) {
         console.error("Erro ao exportar:", e);
         Swal.fire('Erro', 'Não foi possível gerar o Excel: ' + e.message, 'error');
