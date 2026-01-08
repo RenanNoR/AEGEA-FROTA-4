@@ -1000,58 +1000,44 @@ window.baixaRapida = function(placa) {
         });
     }
 
-    // FUNÇÕES DE MANUTENÇÃO
-   window.renderizarHistorico = function() {
+window.renderizarHistorico = function() {
     const tb = document.querySelector('#tabela-historico tbody');
     if (!tb) return;
     tb.innerHTML = '';
 
-    // 1. LÓGICA DE DADOS: Decide se usa a lista filtrada ou a completa
     let itens = (window.historicoFiltradoCache !== undefined) 
                 ? window.historicoFiltradoCache 
                 : (window.historico || []);
 
-    // 2. LÓGICA DE PAGINAÇÃO
     const porPagina = window.itensPorPagina || 10;
     const atual = window.paginaAtual || 1;
     const start = (atual - 1) * porPagina;
     const end = start + porPagina;
 
-    // Ordena por data (mais recente primeiro) e corta para a página atual
     const listaExibicao = [...itens]
         .sort((a, b) => new Date(b.saida) - new Date(a.saida))
         .slice(start, end);
 
-    // 3. ATUALIZA INFO DA PÁGINA
-    const totalPaginas = Math.ceil(itens.length / porPagina) || 1;
-    const pageInfo = document.getElementById('page-info');
-    if (pageInfo) pageInfo.innerText = `Página ${atual} de ${totalPaginas}`;
-
-    // Caso a lista esteja vazia
-    if (listaExibicao.length === 0) {
-        tb.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:gray;">Nenhum registro encontrado.</td></tr>';
-        return;
-    }
-
-    // 4. RENDERIZAÇÃO DAS LINHAS
     listaExibicao.forEach(h => {
         try {
             const tr = document.createElement('tr');
             
-            // Cálculo de KM e Datas
-            const kmRodados = (h.kmChegada && h.kmSaida) ? (h.kmChegada - h.kmSaida) : (h.kmRodados || 0);
-            const dataDoc = h.chegada ? new Date(h.chegada).toLocaleDateString('pt-BR') : '---';
-            const horaS = h.saida ? new Date(h.saida).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '--:--';
-            const horaC = h.chegada ? new Date(h.chegada).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '--:--';
+            // Cálculos básicos
+            const kmR = (h.kmChegada && h.kmSaida) ? (h.kmChegada - h.kmSaida) : (h.kmRodados || 0);
+            const dataD = h.saida ? new Date(h.saida).toLocaleDateString('pt-BR') : '---';
+            const hS = h.saida ? new Date(h.saida).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '--:--';
+            const hC = h.chegada ? new Date(h.chegada).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '--:--';
 
+            // ESTA ORDEM ABAIXO DEVE SEGUIR O THEAD DO SEU HTML:
+            // 1. Data/Hora | 2. Placa | 3. Condutor | 4. KM | 5. Obs | 6. Foto | 7. Ação
             tr.innerHTML = `
                 <td>
-                    <strong>${dataDoc}</strong><br>
-                    <small style="color: #64748b;">${horaS} às ${horaC}</small>
+                    <strong>${dataD}</strong><br>
+                    <small style="color: #64748b;">${hS} às ${hC}</small>
                 </td>
                 <td><strong>${h.placa || '---'}</strong></td>
                 <td>${h.condutor || '---'}</td>
-                <td>${kmRodados} km</td>
+                <td>${kmR} km</td>
                 <td>${h.obs || h.justificativa || '-'}</td>
                 
                 <td style="text-align:center">
@@ -1061,7 +1047,7 @@ window.baixaRapida = function(placa) {
                 </td>
 
                 <td class="admin-only" style="text-align:center">
-                    <button onclick="window.apagarHistorico('${h.firebaseKey}')" style="background:none; border:none; color:#ef4444; cursor:pointer;">
+                    <button onclick="window.apagarHistorico('${h.firebaseKey}')" style="background:none; border:none; color:#ef4444; cursor:pointer; font-size:1.2rem;">
                         <i class="fa-solid fa-trash"></i>
                     </button>
                 </td>
@@ -1072,7 +1058,6 @@ window.baixaRapida = function(placa) {
         }
     });
 };
-
 // 5. FUNÇÃO PARA ABRIR A FOTO (Resolve o about:blank)
 window.visualizarFoto = function(url) {
     if (!url || url.length < 10) {
