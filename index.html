@@ -1006,23 +1006,48 @@ window.baixaRapida = function(placa) {
     if (!tb) return;
     tb.innerHTML = '';
 
-    // Filtra apenas registros válidos e inverte a ordem (mais novos primeiro)
-    const lista = [...(window.historico || [])].reverse();
+    // 1. LÓGICA DE DADOS: Decide se usa a lista filtrada ou a completa
+    let itens = (window.historicoFiltradoCache !== undefined) 
+                ? window.historicoFiltradoCache 
+                : (window.historico || []);
 
-    lista.forEach(h => {
+    // 2. LÓGICA DE PAGINAÇÃO
+    const porPagina = window.itensPorPagina || 10;
+    const atual = window.paginaAtual || 1;
+    const start = (atual - 1) * porPagina;
+    const end = start + porPagina;
+
+    // Ordena por data (mais recente primeiro) e corta para a página atual
+    const listaExibicao = [...itens]
+        .sort((a, b) => new Date(b.saida) - new Date(a.saida))
+        .slice(start, end);
+
+    // 3. ATUALIZA INFO DA PÁGINA
+    const totalPaginas = Math.ceil(itens.length / porPagina) || 1;
+    const pageInfo = document.getElementById('page-info');
+    if (pageInfo) pageInfo.innerText = `Página ${atual} de ${totalPaginas}`;
+
+    // Caso a lista esteja vazia
+    if (listaExibicao.length === 0) {
+        tb.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:gray;">Nenhum registro encontrado.</td></tr>';
+        return;
+    }
+
+    // 4. RENDERIZAÇÃO DAS LINHAS
+    listaExibicao.forEach(h => {
         try {
             const tr = document.createElement('tr');
-            const kmRodados = (h.kmChegada && h.kmSaida) ? (h.kmChegada - h.kmSaida) : 0;
             
-            // Formatação segura de datas
+            // Cálculo de KM e Datas
+            const kmRodados = (h.kmChegada && h.kmSaida) ? (h.kmChegada - h.kmSaida) : (h.kmRodados || 0);
             const dataDoc = h.chegada ? new Date(h.chegada).toLocaleDateString('pt-BR') : '---';
-            const horaSaida = h.saida ? new Date(h.saida).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : '--:--';
-            const horaChegada = h.chegada ? new Date(h.chegada).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) : '--:--';
+            const horaS = h.saida ? new Date(h.saida).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '--:--';
+            const horaC = h.chegada ? new Date(h.chegada).toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '--:--';
 
             tr.innerHTML = `
                 <td>
                     <strong>${dataDoc}</strong><br>
-                    <small style="color: #64748b;">${horaSaida} às ${horaChegada}</small>
+                    <small style="color: #64748b;">${horaS} às ${horaC}</small>
                 </td>
                 <td><strong>${h.placa || '---'}</strong></td>
                 <td>${h.condutor || '---'}</td>
@@ -1031,7 +1056,7 @@ window.baixaRapida = function(placa) {
                 
                 <td style="text-align:center">
                     ${h.fotoComprovante 
-                        ? `<button onclick="window.open('${h.fotoComprovante}', '_blank')" style="background:#003087; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer"><i class="fa-solid fa-camera"></i> Ver</button>` 
+                        ? `<button onclick="window.visualizarFoto('${h.fotoComprovante}')" style="background:#003087; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer"><i class="fa-solid fa-camera"></i> Ver</button>` 
                         : '<span style="color:#ccc">---</span>'}
                 </td>
 
@@ -1043,10 +1068,54 @@ window.baixaRapida = function(placa) {
             `;
             tb.appendChild(tr);
         } catch (err) {
-            console.error("Erro ao renderizar linha do histórico:", err, h);
+            console.error("Erro na linha:", err);
         }
     });
 };
+
+// 5. FUNÇÃO PARA ABRIR A FOTO (Resolve o about:blank)
+window.visualizarFoto = function(url) {
+    if (!url || url.length < 10) {
+        Swal.fire('Erro', 'Foto não disponível.', 'error');
+        return;
+    }
+    const novaAba = window.open("");
+    novaAba.document.write(`<html><body style="margin:0;background:#222;display:flex;align-items:center;justify-content:center;"><img src="${url}" style="max-width:100%; max-height:100%;"></body></html>`);
+};
+    
+window.visualizarFoto = function(url) {
+    if (!url || url === 'undefined' || url.length < 10) {
+        Swal.fire('Aviso', 'Este registro não possui uma foto válida.', 'info');
+        return;
+    }
+
+    // Tenta abrir em uma nova aba de forma limpa
+    const img = new Image();
+    img.src = url;
+    const novaAba = window.open("");
+    
+    if (novaAba) {
+        novaAba.document.write(`
+            <html>
+                <head><title>Visualizar Comprovante</title></head>
+                <body style="margin:0; display:flex; justify-content:center; align-items:center; background:#222;">
+                    <img src="${url}" style="max-width:100%; max-height:100vh; box-shadow: 0 0 20px rgba(0,0,0,0.5);">
+                </body>
+            </html>
+        `);
+    } else {
+        // Se o navegador bloquear o popup, usamos o SweetAlert como plano B
+        Swal.fire({
+            title: 'Comprovante',
+            imageUrl: url,
+            imageWidth: 400,
+            imageAlt: 'Foto do Comprovante',
+            confirmButtonText: 'Fechar',
+            confirmButtonColor: '#003087'
+        });
+    }
+};
+    
     // FUNÇÕES DE DASHBOARD
     window.atualizarDashboard = function() {
         if(currentUserRole !== 'admin') return;
@@ -1270,11 +1339,16 @@ window.renderizarHistorico = function() {
                     ? `<button onclick="window.open('${i.fotoComprovante}', '_blank')" style="background:#003087; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer"><i class="fa-solid fa-camera"></i> Ver</button>` 
                     : '<span style="color:#ccc">---</span>'}
             </td>
-            <td data-label="Ação" class="admin-only" style="text-align:center">
-                <button onclick="window.deletarHistorico('${i.firebaseKey || ''}')" style="color:#ef4444; background:none; border:none; cursor:pointer; font-size:1.1rem">
-                    <i class="fa-solid fa-trash"></i>
-                </button>
-            </td>
+    
+
+<td data-label="Foto" style="text-align:center">
+    ${(i.fotoComprovante && i.fotoComprovante.length > 10) 
+        ? `<button onclick="window.visualizarFoto('${i.fotoComprovante}')" 
+                style="background:#003087; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer">
+                <i class="fa-solid fa-camera"></i> Ver
+           </button>` 
+        : '<span style="color:#ccc">---</span>'}
+</td>
         `;
         tb.appendChild(tr);
     });
